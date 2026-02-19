@@ -44,7 +44,7 @@ with st.expander("ℹ️ คำอธิบายศัพท์เทคนิ�
     <div class="info-box">
     <p><b>1. Deadweight:</b> ผลลัพธ์ที่จะเกิดขึ้นอยู่แล้วแม้ไม่มีโครงการ</p>
     <p><b>2. Displacement:</b> การย้ายปัญหาจากจุดหนึ่งไปอีกจุดหนึ่ง</p>
-    <p><b>3. Attribution:</b> ผลที่เกิดจากหน่วยงานอื่นที่เราไม่ได้ทำเอง 100%</p>
+    <p><b>3. Attribution:</b> ผลที่เกิดจากปัจจัยภายนอกที่ไม่ใช่โครงการเรา 100%</p>
     <p><b>4. Drop-off:</b> อัตราที่ผลประโยชน์ลดลงในแต่ละปีหลังโครงการสิ้นสุด</p>
     <p><b>5. Present Value (PV):</b> มูลค่าปัจจุบันของเงินในอนาคต</p>
     </div>
@@ -94,10 +94,10 @@ def add_row():
 def remove_row():
     if st.session_state.num_rows > 1: st.session_state.num_rows -= 1
 
-st.subheader("📝 รายละเอียดข้อมูลผลลัพธ์")
+st.subheader("📝 รายละเอียดข้อมูลผลลัพธ์ (คำนวนได้สูงสุด 10 รายการ)")
 c_b1, c_b2, _ = st.columns([1, 1, 4])
-with c_b1: st.button("➕ เพิ่มแถว", on_click=add_row, use_container_width=True)
-with c_b2: st.button("➖ ลบแถว", on_click=remove_row, use_container_width=True)
+with c_b1: st.button("➕ เพิ่มรายการ", on_click=add_row, use_container_width=True)
+with c_b2: st.button("➖ ลบรายการ", on_click=remove_row, use_container_width=True)
 
 outcomes_input = []
 for i in range(st.session_state.num_rows):
@@ -140,35 +140,32 @@ if 'res' in st.session_state:
         st.download_button("Download CSV (Excel)", csv, f"SROI_{r['p_name']}.csv", "text/csv")
     with e_col2:
         def generate_pdf(data):
-            # สร้าง PDF โดยเปิดใช้งาน Unicode
+            # ใช้ fpdf2 และเปิดการใช้งาน Unicode อย่างเต็มรูปแบบ
             pdf = FPDF()
             pdf.add_page()
             
             font_path = "THSarabun.ttf"
+            font_name = "THSarabun"
+            
             if os.path.exists(font_path):
-                # สำคัญ: ต้องใส่ชื่อฟอนต์ที่ประกาศกับ pdf.set_font ให้ตรงกันเป๊ะ
-                pdf.add_font("THSarabun", style="", fname=font_path)
-                pdf.set_font("THSarabun", size=18)
+                # เพิ่มฟอนต์และกำหนดชื่ออ้างอิง
+                pdf.add_font(font_name, style="", fname=font_path)
+                pdf.set_font(font_name, size=16)
             else:
-                pdf.set_font("helvetica", size=14)
+                pdf.set_font("helvetica", size=12)
             
-            # เขียนเนื้อหาภาษาไทยโดยตรง (ถ้ามีฟอนต์จะแสดงผลได้)
-            pdf.cell(200, 10, txt="SROI Analysis Report", ln=True, align='C')
-            pdf.ln(10)
-            pdf.cell(200, 10, txt=f"ชื่อโครงการ: {data['p_name']}", ln=True)
-            pdf.cell(200, 10, txt=f"SROI Ratio: {data['ratio']:.2f}", ln=True)
-            pdf.cell(200, 10, txt=f"Total PV: {data['tpv']:,.2f} บาท", ln=True)
-            pdf.cell(200, 10, txt=f"Net PV: {data['npv']:,.2f} บาท", ln=True)
-            pdf.ln(10)
-            pdf.cell(200, 10, txt="สรุปรายรายการ:", ln=True)
+            # เขียนข้อความ
+            pdf.cell(0, 10, txt="SROI Analysis Report", new_x="LMARGIN", new_y="NEXT", align='C')
+            pdf.ln(5)
+            pdf.cell(0, 10, txt=f"ชื่อโครงการ: {data['p_name']}", new_x="LMARGIN", new_y="NEXT")
+            pdf.cell(0, 10, txt=f"SROI Ratio: {data['ratio']:.2f}", new_x="LMARGIN", new_y="NEXT")
+            pdf.cell(0, 10, txt=f"Total PV: {data['tpv']:,.2f} บาท", new_x="LMARGIN", new_y="NEXT")
+            pdf.cell(0, 10, txt=f"Net PV: {data['npv']:,.2f} บาท", new_x="LMARGIN", new_y="NEXT")
+            pdf.ln(5)
+            pdf.cell(0, 10, txt="สรุปรายรายการ:", new_x="LMARGIN", new_y="NEXT")
+            
             for d in data['details']:
-                # ใช้ชื่อคอลัมน์ภาษาไทยให้ตรงกับใน DataFrame
-                pdf.cell(200, 10, txt=f"- {d['ผู้มีส่วนได้เสีย/ผลลัพธ์']}: {d['Total PV (TPV)']:,.2f} บาท", ln=True)
-            
-            return bytes(pdf.output())
-
-        try:
-            pdf_bytes = generate_pdf(r)
-            st.download_button("Download PDF (Report)", pdf_bytes, f"SROI_Report_{r['p_name']}.pdf", "application/pdf")
-        except Exception as e:
-            st.error(f"เกิดข้อผิดพลาดในการสร้าง PDF: {e}")
+                # ดึงค่าจาก Key ภาษาไทยให้ถูกต้อง
+                stk_text = d.get('ผู้มีส่วนได้เสีย/ผลลัพธ์', 'N/A')
+                pv_text = d.get('Total PV (TPV)', 0)
+                pdf.cell(
