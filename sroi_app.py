@@ -109,7 +109,7 @@ with st.sidebar:
     st.divider()
     if st.button("🗑️ ล้างข้อมูลทั้งหมด", use_container_width=True):
         reset_system()
-    st.caption("ตรวจสอบความเสี่ยงโดย: จั่นเจา")
+    st.caption("พัฒนาระบบโดย : สำนักวิจัย มหาวิทยาลัยพายัพ)
 
 # --- 7. การจัดการรายการผู้มีส่วนได้เสีย ---
 if 'num_rows' not in st.session_state:
@@ -122,8 +122,8 @@ def remove_row():
 
 st.subheader("📝 รายละเอียดข้อมูลผลลัพธ์")
 c_b1, c_b2, _ = st.columns([1, 1, 4])
-with c_b1: st.button("➕ เพิ่มแถว", on_click=add_row, use_container_width=True)
-with c_b2: st.button("➖ ลบแถว", on_click=remove_row, use_container_width=True)
+with c_b1: st.button("➕ เพิ่มรายการ", on_click=add_row, use_container_width=True)
+with c_b2: st.button("➖ ลบรายการ", on_click=remove_row, use_container_width=True)
 
 outcomes_input = []
 for i in range(st.session_state.num_rows):
