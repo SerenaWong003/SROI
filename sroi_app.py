@@ -94,7 +94,7 @@ def add_row():
 def remove_row():
     if st.session_state.num_rows > 1: st.session_state.num_rows -= 1
 
-st.subheader("📝 รายละเอียดข้อมูลผลลัพธ์ (คำนวนได้สูงสุด 10 รายการ)")
+st.subheader("📝 รายละเอียดข้อมูลผลลัพธ์ คำนวนได้สูงสุด 10 รายการ")
 c_b1, c_b2, _ = st.columns([1, 1, 4])
 with c_b1: st.button("➕ เพิ่มรายการ", on_click=add_row, use_container_width=True)
 with c_b2: st.button("➖ ลบรายการ", on_click=remove_row, use_container_width=True)
@@ -168,4 +168,12 @@ if 'res' in st.session_state:
                 # ดึงค่าจาก Key ภาษาไทยให้ถูกต้อง
                 stk_text = d.get('ผู้มีส่วนได้เสีย/ผลลัพธ์', 'N/A')
                 pv_text = d.get('Total PV (TPV)', 0)
-                pdf.cell(
+                pdf.cell(0, 10, txt=f"- {stk_text}: {pv_text:,.2f} บาท", new_x="LMARGIN", new_y="NEXT")
+            
+            return bytes(pdf.output())
+
+        try:
+            pdf_bytes = generate_pdf(r)
+            st.download_button("Download PDF (Report)", pdf_bytes, f"SROI_Report_{r['p_name']}.pdf", "application/pdf")
+        except Exception as e:
+            st.error(f"เกิดข้อผิดพลาดในการสร้าง PDF: {e}")
