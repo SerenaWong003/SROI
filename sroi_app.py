@@ -37,17 +37,17 @@ def reset_system():
     st.session_state.num_rows = 1
     st.rerun()
 
-st.title("📊 SROI Calculator for University Research")
+st.title("📊 SROI Calculator (Full Financial Edition)")
 
-# --- 4. ส่วนอธิบายศัพท์ (Glossary) ---
+# --- 4. ส่วนอธิบายศัพท์ (ตัวหนังสือสีดำ พื้นหลังขาว) ---
 with st.expander("ℹ️ คำอธิบายศัพท์เทคนิคในการคำนวณ SROI", expanded=False):
     st.markdown("""
     <div class="info-box">
     <p><b>1. Deadweight:</b> ผลลัพธ์ที่จะเกิดขึ้นอยู่แล้วแม้ไม่มีโครงการ</p>
     <p><b>2. Displacement:</b> การย้ายปัญหาจากจุดหนึ่งไปอีกจุดหนึ่ง</p>
-    <p><b>3. Attribution:</b> ผลที่เกิดจากหน่วยงานอื่นที่ไม่ใช่โครงการนี้ 100%</p>
+    <p><b>3. Attribution:</b> ผลที่เกิดจากหน่วยงานอื่นที่เราไม่ได้ทำเอง 100%</p>
     <p><b>4. Drop-off:</b> อัตราที่ผลประโยชน์ลดลงในแต่ละปีหลังโครงการสิ้นสุด</p>
-    <p><b>5. Present Value (PV):</b> มูลค่าปัจจุบันของเงินในอนาคตที่ทอนกลับมาด้วยอัตราคิดลด</p>
+    <p><b>5. Present Value (PV):</b> มูลค่าปัจจุบันของเงินในอนาคต</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -73,8 +73,8 @@ def calculate_advanced_sroi(total_input, discount_rate, duration, outcomes):
             row_data[f"ปีที่ {y_idx+1} (PV)"] = y_pv
         detailed_list.append(row_data)
     total_pv_all = sum(yearly_totals)
-    sroi_ratio = total_pv_all / total_input if total_input > 0 else 0
-    return sroi_ratio, total_pv_all, detailed_list, yearly_totals
+    ratio = total_pv_all / total_input if total_input > 0 else 0
+    return ratio, total_pv_all, detailed_list, yearly_totals
 
 # --- 6. ส่วน Sidebar ---
 with st.sidebar:
@@ -88,14 +88,14 @@ with st.sidebar:
         reset_system()
     st.caption("พัฒนาระบบโดย : สำนักวิจัย มหาวิทยาลัยพายัพ")
 
-# --- 7. การจัดการแถวข้อมูล ---
+# --- 7. การจัดการรายการข้อมูล ---
 if 'num_rows' not in st.session_state: st.session_state.num_rows = 1
 def add_row():
     if st.session_state.num_rows < 10: st.session_state.num_rows += 1
 def remove_row():
     if st.session_state.num_rows > 1: st.session_state.num_rows -= 1
 
-st.subheader("📝 รายละเอียดข้อมูลและปัจจัยปรับลด สูงสุด 10 รายการ")
+st.subheader("📝 รายละเอียดข้อมูลผลลัพธ์ สูงสุด 10 รายการ")
 c_b1, c_b2, _ = st.columns([1, 1, 4])
 with c_b1: st.button("➕ เพิ่มรายการ", on_click=add_row, use_container_width=True)
 with c_b2: st.button("➖ ลบรายการ", on_click=remove_row, use_container_width=True)
@@ -104,9 +104,9 @@ outcomes_input = []
 for i in range(st.session_state.num_rows):
     with st.expander(f"รายการที่ {i+1}", expanded=True):
         r1_c1, r1_c2, r1_c3 = st.columns([2, 1, 1])
-        with r1_c1: stk = st.text_input("ชื่อผู้มีส่วนได้เสีย/ผลลัพธ์", key=f"stk_{i}")
-        with r1_c2: prx = st.number_input("ค่าแทนทางการเงิน (Proxy)", value=0, key=f"prx_{i}")
-        with r1_c3: q = st.number_input("จำนวน/ปริมาณ", value=0, key=f"q_{i}")
+        with r1_c1: stk = st.text_input("ชื่อผลลัพธ์", key=f"stk_{i}")
+        with r1_c2: prx = st.number_input("Proxy (บาท)", value=0, key=f"prx_{i}")
+        with r1_c3: q = st.number_input("จำนวนหน่วย", value=0, key=f"q_{i}")
         r2_c1, r2_c2, r2_c3, r2_c4 = st.columns(4) 
         with r2_c1: dw = st.slider("Deadweight", 0.0, 1.0, 0.0, key=f"dw_{i}")
         with r2_c2: disp = st.slider("Displacement", 0.0, 1.0, 0.0, key=f"disp_{i}")
@@ -115,14 +115,9 @@ for i in range(st.session_state.num_rows):
         outcomes_input.append({"stakeholder": stk, "proxy": prx, "qty": q, "dw": dw, "disp": disp, "attr": att, "drop_off": drp})
 
 # --- 8. ประมวลผลและส่งออกรายงาน ---
-if st.button("🚀 คำนวณและประมวลผล SROI", type="primary", use_container_width=True):
+if st.button("🚀 คำนวณผล SROI", type="primary", use_container_width=True):
     ratio, tpv, details, y_totals = calculate_advanced_sroi(t_input, d_rate, years, outcomes_input)
-    # เก็บข้อมูลลง Session State เพื่อให้ดาวน์โหลดได้โดยไม่เจอ NameError
-    st.session_state.res = {
-        "ratio": ratio, "tpv": tpv, "npv": tpv - t_input, 
-        "details": details, "y_totals": y_totals, 
-        "t_input": t_input, "p_name": p_name
-    }
+    st.session_state.res = {"ratio": ratio, "tpv": tpv, "npv": tpv - t_input, "details": details, "y_totals": y_totals, "t_input": t_input, "p_name": p_name}
 
 if 'res' in st.session_state:
     r = st.session_state.res
@@ -133,22 +128,18 @@ if 'res' in st.session_state:
     m3.metric("Net PV (NPV)", f"฿{r['npv']:,.2f}")
     m4.metric("Total Input", f"฿{r['t_input']:,.2f}")
 
-    df_final = pd.DataFrame(r['details'])
+    df_res = pd.DataFrame(r['details'])
     summary_row = {"ผู้มีส่วนได้เสีย/ผลลัพธ์": "TOTAL PV PER YEAR", "Total PV (TPV)": r['tpv']}
     for idx, val in enumerate(r['y_totals']): summary_row[f"ปีที่ {idx+1} (PV)"] = val
-    df_with_summary = pd.concat([df_final, pd.DataFrame([summary_row])], ignore_index=True)
+    df_with_summary = pd.concat([df_res, pd.DataFrame([summary_row])], ignore_index=True)
     st.dataframe(df_with_summary.style.format(precision=2, thousands=","), use_container_width=True)
 
     st.subheader("📥 ดาวน์โหลดรายงาน")
     e_col1, e_col2 = st.columns(2)
-    
     with e_col1:
-        # 1. Export CSV (รองรับภาษาไทย)
-        csv_data = df_with_summary.to_csv(index=False).encode('utf-8-sig')
-        st.download_button("Download CSV (Excel)", csv_data, f"SROI_{r['p_name']}.csv", "text/csv")
-    
+        csv = df_with_summary.to_csv(index=False).encode('utf-8-sig')
+        st.download_button("Download CSV (Excel)", csv, f"SROI_{r['p_name']}.csv", "text/csv")
     with e_col2:
-        # 2. Export PDF (รองรับภาษาไทย)
         def generate_pdf(data):
             pdf = FPDF()
             pdf.add_page()
@@ -157,23 +148,22 @@ if 'res' in st.session_state:
                 pdf.add_font("THSarabun", "", font_path)
                 pdf.set_font("THSarabun", size=18)
             else:
-                pdf.set_font("Arial", size=14)
+                pdf.set_font("helvetica", size=14)
             
-            def s_txt(text):
-                if not os.path.exists(font_path):
-                    return "".join([c if ord(c) < 128 else "?" for c in str(text)])
-                return str(text)
-
+            def s_txt(t): return str(t) if os.path.exists(font_path) else "".join([c if ord(c) < 128 else "?" for c in str(t)])
+            
             pdf.cell(200, 10, txt=s_txt("SROI Analysis Report"), ln=True, align='C')
             pdf.ln(10)
             pdf.cell(200, 10, txt=s_txt(f"โครงการ: {data['p_name']}"), ln=True)
             pdf.cell(200, 10, txt=s_txt(f"SROI Ratio: {data['ratio']:.2f}"), ln=True)
-            pdf.cell(200, 10, txt=s_txt(f"Total PV (TPV): {data['tpv']:,.2f} บาท"), ln=True)
+            pdf.cell(200, 10, txt=s_txt(f"Total PV: {data['tpv']:,.2f} บาท"), ln=True)
             pdf.ln(10)
-            pdf.cell(200, 10, txt=s_txt("สรุปรายรายการ:"), ln=True)
+            pdf.cell(200, 10, txt=s_txt("รายละเอียด:"), ln=True)
             for d in data['details']:
                 pdf.cell(200, 10, txt=s_txt(f"- {d['ผู้มีส่วนได้เสีย/ผลลัพธ์']}: {d['Total PV (TPV)']:,.2f} บาท"), ln=True)
-            return pdf.output()
+            
+            # --- จุดแก้ไขสำคัญ: แปลง bytearray เป็น bytes ---
+            return bytes(pdf.output())
 
         try:
             pdf_bytes = generate_pdf(r)
