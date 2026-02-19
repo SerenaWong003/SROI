@@ -2,4 +2,5 @@ streamlit
 pandas
 st-gsheets-connection
 fpdf
+fpdf2
 
