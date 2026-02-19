@@ -40,7 +40,7 @@ with st.expander("ℹ️ คำอธิบายศัพท์เทคนิ�
 # --- Logic การคำนวณขั้นสูง ---
 def calculate_advanced_sroi(total_input, discount_rate, duration, outcomes):
     detailed_list = []
-    yearly_totals = [0.0] * duration # สำหรับเก็บผลรวม PV แต่ละปี
+    yearly_totals = [0.0] * duration 
     
     for item in outcomes:
         if not item['stakeholder']: continue
@@ -65,12 +65,10 @@ def calculate_advanced_sroi(total_input, discount_rate, duration, outcomes):
             item_total_pv += pv
             yearly_totals[year_idx] += pv
             
-        # สร้างก้อนข้อมูลสำหรับตาราง
         row_data = {
             "Stakeholder/Outcome": item['stakeholder'],
             "Total PV (by Item)": item_total_pv
         }
-        # เพิ่มคอลัมน์ Y1, Y2... เข้าไปใน Dictionary
         for y_idx, y_pv in enumerate(item_yearly_pvs):
             row_data[f"Year {y_idx+1} PV"] = y_pv
             
@@ -90,24 +88,4 @@ with st.sidebar:
     st.divider()
     st.caption("จัดทำโดยสำนักวิจัย มหาวิทยาลัยพายัพ")
 
-# --- การกรอกข้อมูล ---
-if 'num_rows' not in st.session_state: st.session_state.num_rows = 1
-def add_row():
-    if st.session_state.num_rows < 10: st.session_state.num_rows += 1
-def remove_row():
-    if st.session_state.num_rows > 1: st.session_state.num_rows -= 1
-
-st.subheader("📝 ข้อมูลนำเข้าสำหรับผู้มีส่วนได้เสีย")
-c1, c2, _ = st.columns([1, 1, 4])
-with c1: st.button("➕ เพิ่มแถว", on_click=add_row, use_container_width=True)
-with c2: st.button("➖ ลบแถว", on_click=remove_row, use_container_width=True)
-
-outcomes_input = []
-for i in range(st.session_state.num_rows):
-    with st.expander(f"รายการที่ {i+1}", expanded=True):
-        r1_c1, r1_c2, r1_c3 = st.columns([2, 1, 1])
-        with r1_c1: stk = st.text_input("ผู้มีส่วนได้เสีย/ผลลัพธ์", key=f"stk_{i}")
-        with r1_c2: prx = st.number_input("Financial Proxy", value=0, key=f"prx_{i}")
-        with r1_c3: q = st.number_input("Quantity", value=0, key=f"q_{i}")
-        
-        r2_c1, r2_c2, r2_c3, r2_c4 = st.columns
+# --- การจัดการจำนวนแถ
