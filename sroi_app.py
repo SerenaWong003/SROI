@@ -63,10 +63,11 @@ with st.expander("ℹ️ คำอธิบายศัพท์เทคนิ�
     </div>
     """, unsafe_allow_html=True)
 
-# --- 5. Logic การคำนวณ ---
+# --- 5. Logic การคำนวณ (แก้ไข NameError) ---
 def calculate_advanced_sroi(total_input, discount_rate, duration, outcomes):
     detailed_list = []
     yearly_totals = [0.0] * duration 
+    
     for item in outcomes:
         if not item['stakeholder']: continue
         dw_f = item['dw'] / 100
@@ -85,11 +86,15 @@ def calculate_advanced_sroi(total_input, discount_rate, duration, outcomes):
             item_yearly_pvs.append(pv)
             item_total_pv += pv
             yearly_totals[year_idx] += pv
+            
         row_data = {"ผู้มีส่วนได้เสีย/ผลลัพธ์": item['stakeholder'], "Total PV (TPV)": item_total_pv}
         for y_idx, y_pv in enumerate(item_yearly_pvs):
             row_data[f"ปีที่ {y_idx+1} (PV)"] = y_pv
         detailed_list.append(row_data)
-    return total_pv_all / total_input if total_input > 0 else 0, sum(yearly_totals), detailed_list, yearly_totals
+        
+    total_pv_sum = sum(yearly_totals)
+    sroi_ratio = total_pv_sum / total_input if total_input > 0 else 0
+    return sroi_ratio, total_pv_sum, detailed_list, yearly_totals
 
 # --- 6. ส่วน Sidebar ---
 with st.sidebar:
@@ -101,6 +106,7 @@ with st.sidebar:
     st.divider()
     if st.button("🗑️ ล้างข้อมูลทั้งหมด", use_container_width=True):
         reset_system()
+    st.caption("พัฒนาระบบโดย : สำนักวิจัย มหาวิทยาลัยพายัพ")
 
 # --- 7. การจัดการรายการ ---
 if 'num_rows' not in st.session_state: st.session_state.num_rows = 1
@@ -108,7 +114,7 @@ def add_row(): st.session_state.num_rows += 1
 def remove_row():
     if st.session_state.num_rows > 1: st.session_state.num_rows -= 1
 
-st.subheader("📝 รายละเอียดข้อมูลและปัจจัยปรับลด สามารถคำนวนได้สูงสุด 10 รายการ ")
+st.subheader("📝 รายละเอียดข้อมูลและปัจจัยปรับลด สามารถคำนวนได้สูงสุด 10 รายการ")
 c_b1, c_b2, _ = st.columns([1, 1, 4])
 with c_b1: st.button("➕ เพิ่มรายการ", on_click=add_row, use_container_width=True)
 with c_b2: st.button("➖ ลบรายการ", on_click=remove_row, use_container_width=True)
@@ -121,7 +127,6 @@ for i in range(st.session_state.num_rows):
         prx = c2.number_input("Proxy (บาท)", value=0, key=f"prx_{i}")
         q = c3.number_input("จำนวน", value=0, key=f"q_{i}")
         
-        # ส่วนปัจจัยปรับลด: มีเฉพาะช่องกรอกตามบัญชา
         f1, f2, f3, f4 = st.columns(4)
         dw = f1.number_input("Deadweight (%)", 0.0, 100.0, 0.0, key=f"dw_{i}")
         disp = f2.number_input("Displacement (%)", 0.0, 100.0, 0.0, key=f"disp_{i}")
@@ -143,22 +148,39 @@ if 'res' in st.session_state:
     m3.metric("Net PV (NPV)", f"฿{r['npv']:,.2f}")
     m4.metric("Total Input", f"฿{r['t_input']:,.2f}")
 
-    df_with_summary = pd.concat([pd.DataFrame(r['details']), pd.DataFrame([{"ผู้มีส่วนได้เสีย/ผลลัพธ์": "TOTAL PV PER YEAR", "Total PV (TPV)": r['tpv'], **{f"ปีที่ {idx+1} (PV)": val for idx, val in enumerate(r['y_totals'])}}])], ignore_index=True)
+    df_final = pd.DataFrame(r['details'])
+    summary_data = {"ผู้มีส่วนได้เสีย/ผลลัพธ์": "TOTAL PV PER YEAR", "Total PV (TPV)": r['tpv']}
+    for idx, val in enumerate(r['y_totals']):
+        summary_data[f"ปีที่ {idx+1} (PV)"] = val
+        
+    df_with_summary = pd.concat([df_final, pd.DataFrame([summary_data])], ignore_index=True)
     st.dataframe(df_with_summary.style.format(precision=2, thousands=","), use_container_width=True)
 
-    # ปุ่มดาวน์โหลด (คงเดิม)
     col_csv, col_pdf = st.columns(2)
     with col_csv:
-        st.download_button("Download CSV", df_with_summary.to_csv(index=False).encode('utf-8-sig'), f"SROI_{r['p_name']}.csv", "text/csv")
+        csv_data = df_with_summary.to_csv(index=False).encode('utf-8-sig')
+        st.download_button("Download CSV (Excel)", csv_data, f"SROI_{r['p_name']}.csv", "text/csv")
     with col_pdf:
         def gen_pdf(data):
             pdf = FPDF()
-            if os.path.exists("THSarabunNew.ttf"):
-                pdf.add_font("THSarabunNew", "", "THSarabunNew.ttf")
-                pdf.add_page(); pdf.set_font("THSarabunNew", size=16)
-            else: pdf.add_page(); pdf.set_font("helvetica", size=12)
-            pdf.cell(0, 10, txt=f"SROI Report: {data['p_name']}", align='C', ln=True)
-            pdf.cell(0, 10, txt=f"SROI Ratio: {data['ratio']:.2f}", ln=True)
-            pdf.cell(0, 10, txt=f"Total PV: {data['tpv']:,.2f} THB", ln=True)
+            font_path = "THSarabunNew.ttf"
+            if os.path.exists(font_path):
+                pdf.add_font("THSarabunNew", "", font_path)
+                pdf.add_page()
+                pdf.set_font("THSarabunNew", size=16)
+            else:
+                pdf.add_page()
+                pdf.set_font("helvetica", size=12)
+            
+            pdf.cell(0, 10, txt=f"SROI Analysis Report: {data['p_name']}", align='C', new_x="LMARGIN", new_y="NEXT")
+            pdf.ln(5)
+            pdf.cell(0, 10, txt=f"SROI Ratio: {data['ratio']:.2f}", new_x="LMARGIN", new_y="NEXT")
+            pdf.cell(0, 10, txt=f"Total PV (TPV): {data['tpv']:,.2f} THB", new_x="LMARGIN", new_y="NEXT")
+            pdf.cell(0, 10, txt=f"Net PV (NPV): {data['npv']:,.2f} THB", new_x="LMARGIN", new_y="NEXT")
             return bytes(pdf.output())
-        st.download_button("Download PDF", gen_pdf(r), f"SROI_{r['p_name']}.pdf", "application/pdf")
+
+        try:
+            pdf_bytes = gen_pdf(r)
+            st.download_button("Download PDF (Report)", pdf_bytes, f"SROI_{r['p_name']}.pdf", "application/pdf")
+        except Exception as e:
+            st.error(f"เกิดข้อผิดพลาดในการสร้าง PDF: {e}")
