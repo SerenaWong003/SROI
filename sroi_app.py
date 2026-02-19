@@ -7,7 +7,7 @@ import os
 # --- 1. การตั้งค่าหน้าจอ ---
 st.set_page_config(page_title="SROI Professional Calculator", layout="wide")
 
-# --- 2. CSS บังคับสีดำบนพื้นหลังขาว ---
+# --- 2. ปรับแต่ง CSS - บังคับสีดำบนพื้นหลังขาว ---
 st.markdown("""
     <style>
     .main { background-color: #f8f9fa; }
@@ -29,22 +29,22 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. ฟังก์ชัน Reset ---
+# --- 3. ฟังก์ชันสำหรับล้างข้อมูล ---
 def reset_system():
     for key in list(st.session_state.keys()):
         del st.session_state[key]
     st.session_state.num_rows = 1
     st.rerun()
 
-st.title("📊 SROI Calculator (Grand Final Edition)")
+st.title("📊 SROI Calculator for University Research")
 
-# --- 4. Glossary ---
+# --- 4. ส่วนอธิบายศัพท์ (Glossary) ---
 with st.expander("ℹ️ คำอธิบายศัพท์เทคนิคในการคำนวณ SROI", expanded=False):
     st.markdown("""
     <div class="info-box">
     <p><b>1. Deadweight:</b> ผลลัพธ์ที่จะเกิดขึ้นอยู่แล้วแม้ไม่มีโครงการ</p>
     <p><b>2. Displacement:</b> การย้ายปัญหาจากจุดหนึ่งไปอีกจุดหนึ่ง</p>
-    <p><b>3. Attribution:</b> ผลที่เกิดจากปัจจัยภายนอกที่ไม่ใช่โครงการเรา 100%</p>
+    <p><b>3. Attribution:</b> ผลที่เกิดจากหน่วยงานอื่นที่เราไม่ได้ทำเอง 100%</p>
     <p><b>4. Drop-off:</b> อัตราที่ผลประโยชน์ลดลงในแต่ละปีหลังโครงการสิ้นสุด</p>
     <p><b>5. Present Value (PV):</b> มูลค่าปัจจุบันของเงินในอนาคต</p>
     </div>
@@ -75,7 +75,7 @@ def calculate_advanced_sroi(total_input, discount_rate, duration, outcomes):
     ratio = total_pv_all / total_input if total_input > 0 else 0
     return ratio, total_pv_all, detailed_list, yearly_totals
 
-# --- 6. Sidebar ---
+# --- 6. ส่วน Sidebar ---
 with st.sidebar:
     st.header("⚙️ ตั้งค่าโครงการ")
     p_name = st.text_input("ชื่อโครงการ", value="โครงการวิจัย_2026")
@@ -84,10 +84,10 @@ with st.sidebar:
     years = st.slider("ระยะเวลาวิเคราะห์ (ปี)", 1, 10, 5)
     st.divider()
     if st.button("🗑️ ล้างข้อมูลทั้งหมด", use_container_width=True):
-        reset_system()
+        reset_system() 
     st.caption("พัฒนาระบบโดย : สำนักวิจัย มหาวิทยาลัยพายัพ")
 
-# --- 7. ข้อมูลนำเข้า ---
+# --- 7. การจัดการข้อมูล ---
 if 'num_rows' not in st.session_state: st.session_state.num_rows = 1
 def add_row():
     if st.session_state.num_rows < 10: st.session_state.num_rows += 1
@@ -113,7 +113,7 @@ for i in range(st.session_state.num_rows):
         with r2_c4: drp = st.slider("Drop-off", 0.0, 1.0, 0.0, key=f"drp_{i}")
         outcomes_input.append({"stakeholder": stk, "proxy": prx, "qty": q, "dw": dw, "disp": disp, "attr": att, "drop_off": drp})
 
-# --- 8. แสดงผลและ Export ---
+# --- 8. ประมวลผลและส่งออกรายงาน ---
 if st.button("🚀 คำนวณผล SROI", type="primary", use_container_width=True):
     ratio, tpv, details, y_totals = calculate_advanced_sroi(t_input, d_rate, years, outcomes_input)
     st.session_state.res = {"ratio": ratio, "tpv": tpv, "npv": tpv - t_input, "details": details, "y_totals": y_totals, "t_input": t_input, "p_name": p_name}
@@ -140,40 +140,37 @@ if 'res' in st.session_state:
         st.download_button("Download CSV (Excel)", csv, f"SROI_{r['p_name']}.csv", "text/csv")
     with e_col2:
         def generate_pdf(data):
-            # ใช้ fpdf2 และเปิดการใช้งาน Unicode อย่างเต็มรูปแบบ
+            # บังคับการใช้ Unicode และกำจัด Helvetica ทิ้ง
             pdf = FPDF()
-            pdf.add_page()
-            
             font_path = "THSarabun.ttf"
-            font_name = "THSarabun"
-            
+            font_name = "THSarabunThai" # ตั้งชื่อใหม่ให้ไม่ซ้ำ
+
             if os.path.exists(font_path):
-                # เพิ่มฟอนต์และกำหนดชื่ออ้างอิง
-                pdf.add_font(font_name, style="", fname=font_path)
+                pdf.add_font(font_name, "", font_path)
+                pdf.add_page()
                 pdf.set_font(font_name, size=16)
             else:
-                pdf.set_font("helvetica", size=12)
+                # ถ้าหาฟอนต์ไม่เจอ บังคับแสดง Error ชัดเจนเพื่อนายหญิงจะได้แก้ไข GitHub ได้ถูกจุด
+                st.error(f"❌ ไม่พบไฟล์ {font_path} ใน GitHub กรุณาอัปโหลดไฟล์ฟอนต์ไว้ในโฟลเดอร์เดียวกับโค้ดครับ")
+                return None
             
-            # เขียนข้อความ
-            pdf.cell(0, 10, txt="SROI Analysis Report", new_x="LMARGIN", new_y="NEXT", align='C')
+            # การเขียน Text ทุกครั้งต้องมั่นใจว่าใช้ฟอนต์ไทย
+            pdf.cell(0, 10, txt="SROI Analysis Report (รายงานวิจัย)", align='C', new_x="LMARGIN", new_y="NEXT")
             pdf.ln(5)
             pdf.cell(0, 10, txt=f"ชื่อโครงการ: {data['p_name']}", new_x="LMARGIN", new_y="NEXT")
             pdf.cell(0, 10, txt=f"SROI Ratio: {data['ratio']:.2f}", new_x="LMARGIN", new_y="NEXT")
-            pdf.cell(0, 10, txt=f"Total PV: {data['tpv']:,.2f} บาท", new_x="LMARGIN", new_y="NEXT")
-            pdf.cell(0, 10, txt=f"Net PV: {data['npv']:,.2f} บาท", new_x="LMARGIN", new_y="NEXT")
-            pdf.ln(5)
-            pdf.cell(0, 10, txt="สรุปรายรายการ:", new_x="LMARGIN", new_y="NEXT")
+            pdf.cell(0, 10, txt=f"Total PV (TPV): {data['tpv']:,.2f} บาท", new_x="LMARGIN", new_y="NEXT")
+            pdf.cell(0, 10, txt=f"Net PV (NPV): {data['npv']:,.2f} บาท", new_x="LMARGIN", new_y="NEXT")
+            pdf.ln(10)
+            pdf.cell(0, 10, txt="รายละเอียดผลลัพธ์:", new_x="LMARGIN", new_y="NEXT")
             
             for d in data['details']:
-                # ดึงค่าจาก Key ภาษาไทยให้ถูกต้อง
-                stk_text = d.get('ผู้มีส่วนได้เสีย/ผลลัพธ์', 'N/A')
-                pv_text = d.get('Total PV (TPV)', 0)
-                pdf.cell(0, 10, txt=f"- {stk_text}: {pv_text:,.2f} บาท", new_x="LMARGIN", new_y="NEXT")
+                stk_name = d.get('ผู้มีส่วนได้เสีย/ผลลัพธ์', 'ไม่ระบุ')
+                val_tpv = d.get('Total PV (TPV)', 0)
+                pdf.cell(0, 10, txt=f"- {stk_name}: {val_tpv:,.2f} บาท", new_x="LMARGIN", new_y="NEXT")
             
             return bytes(pdf.output())
 
-        try:
-            pdf_bytes = generate_pdf(r)
-            st.download_button("Download PDF (Report)", pdf_bytes, f"SROI_Report_{r['p_name']}.pdf", "application/pdf")
-        except Exception as e:
-            st.error(f"เกิดข้อผิดพลาดในการสร้าง PDF: {e}")
+        pdf_data = generate_pdf(r)
+        if pdf_data:
+            st.download_button("Download PDF (Report)", pdf_data, f"SROI_Report_{r['p_name']}.pdf", "application/pdf")
