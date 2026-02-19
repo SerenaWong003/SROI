@@ -107,10 +107,10 @@ for i in range(st.session_state.num_rows):
         with r1_c2: prx = st.number_input("Proxy (บาท)", value=0, key=f"prx_{i}")
         with r1_c3: q = st.number_input("จำนวนหน่วย", value=0, key=f"q_{i}")
         r2_c1, r2_c2, r2_c3, r2_c4 = st.columns(4) 
-        with r2_c1: dw = st.slider("Deadweight", 0.0, 1.0, 0.0, key=f"dw_{i}")
-        with r2_c2: disp = st.slider("Displacement", 0.0, 1.0, 0.0, key=f"disp_{i}")
-        with r2_c3: att = st.slider("Attribution", 0.0, 1.0, 0.0, key=f"attr_{i}")
-        with r2_c4: drp = st.slider("Drop-off", 0.0, 1.0, 0.0, key=f"drp_{i}")
+        with r2_c1: dw = st.slider("Deadweight", 0.0, 100.0, 0.0, key=f"dw_{i}")
+        with r2_c2: disp = st.slider("Displacement", 0.0, 100.0, 0.0, key=f"disp_{i}")
+        with r2_c3: att = st.slider("Attribution", 0.0, 100.0, 0.0, key=f"attr_{i}")
+        with r2_c4: drp = st.slider("Drop-off", 0.0, 100.0, 0.0, key=f"drp_{i}")
         outcomes_input.append({"stakeholder": stk, "proxy": prx, "qty": q, "dw": dw, "disp": disp, "attr": att, "drop_off": drp})
 
 # --- 8. ประมวลผลและส่งออกรายงาน ---
