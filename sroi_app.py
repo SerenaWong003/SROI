@@ -6,43 +6,46 @@ import datetime
 # --- 1. การตั้งค่าหน้าจอ ---
 st.set_page_config(page_title="SROI Professional Calculator", layout="wide")
 
-# --- 2. ปรับแต่ง CSS - บังคับสีดำบนพื้นหลังขาวสำหรับ Metrics และ Glossary ---
+# --- 2. ปรับแต่ง CSS - บังคับสีดำบนพื้นหลังขาวสำหรับส่วนสรุปผล ---
 st.markdown("""
     <style>
     .main { background-color: #f8f9fa; }
     
-    /* ปรับแต่งส่วน Metric ให้พื้นหลังขาว ตัวหนังสือดำ */
+    /* ปรับแต่งส่วน Metric ให้พื้นหลังขาว ตัวหนังสือดำ และมีเส้นขอบบางๆ */
     [data-testid="metric-container"] {
         background-color: #ffffff !important;
         border: 1px solid #dee2e6;
-        padding: 15px;
-        border-radius: 10px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        padding: 20px;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        text-align: center;
     }
     [data-testid="stMetricValue"] {
         color: #000000 !important;
         font-weight: bold;
+        font-size: 2rem !important;
     }
     [data-testid="stMetricLabel"] {
         color: #000000 !important;
-        font-weight: 500;
+        font-weight: 600;
+        font-size: 1.1rem !important;
     }
 
-    /* ปรับแต่งส่วนคำอธิบาย Glossary ให้ตัวหนังสือดำชัดเจน */
+    /* ปรับแต่งส่วนคำอธิบาย Glossary ให้ตัวหนังสือดำชัดเจนบนพื้นขาว */
     .info-box { 
         background-color: #ffffff; 
         padding: 20px; 
         border-radius: 8px; 
         border: 1px solid #2980b9; 
-        border-left: 8px solid #2980b9;
-        margin-bottom: 20px;
+        border-left: 10px solid #2980b9;
+        margin-bottom: 25px;
         color: #000000 !important;
     }
     .info-box b, .info-box p { color: #000000 !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. ฟังก์ชันสำหรับล้างข้อมูลทั้งหมด (Clear Data) ---
+# --- 3. ฟังก์ชันสำหรับล้างข้อมูล (Clear Data) ---
 def reset_system():
     for key in list(st.session_state.keys()):
         del st.session_state[key]
@@ -51,15 +54,15 @@ def reset_system():
 
 st.title("📊 SROI Calculator (Full Financial Edition)")
 
-# --- 4. ส่วนอธิบายศัพท์ (ตัวหนังสือสีดำ พื้นขาว) ---
-with st.expander("ℹ️ คำอธิบายศัพท์เทคนิคและเกณฑ์การปรับมูลค่า (Glossary)", expanded=False):
+# --- 4. ส่วนอธิบายศัพท์ (ตัวหนังสือสีดำ พื้นหลังขาว) ---
+with st.expander("ℹ️ คำอธิบายศัพท์เทคนิคในการคำนวณ SROI", expanded=False):
     st.markdown("""
     <div class="info-box">
-    <p><b>1. Deadweight:</b> ผลลัพธ์ที่จะเกิดขึ้นอยู่แล้วแม้ไม่มีโครงการ (เช่น รายได้ที่เพิ่มขึ้นเองตามกลไกตลาด)</p>
-    <p><b>2. Displacement:</b> ผลของโครงการที่ไปทำให้เกิดปัญหาในพื้นที่อื่นแทน</p>
-    <p><b>3. Attribution:</b> ผลที่เกิดจากหน่วยงานอื่นหรือปัจจัยภายนอกที่ไม่ใช่โครงการเรา 100%</p>
-    <p><b>4. Drop-off:</b> อัตราที่ผลประโยชน์จะลดลงในแต่ละปี หลังจากโครงการเสร็จสิ้นลง</p>
-    <p><b>5. Present Value (PV):</b> มูลค่าของเงินในอนาคตที่ถูกทอนกลับมาเป็นมูลค่าในปัจจุบัน</p>
+    <p><b>1. Deadweight:</b> ผลลัพธ์ที่จะเกิดขึ้นอยู่แล้วแม้ไม่มีโครงการ</p>
+    <p><b>2. Displacement:</b> การย้ายปัญหาจากจุดหนึ่งไปอีกจุดหนึ่ง</p>
+    <p><b>3. Attribution:</b> ผลที่เกิดจากหน่วยงานอื่นที่ไม่ใช่โครงการเรา 100%</p>
+    <p><b>4. Drop-off:</b> อัตราที่ผลประโยชน์ลดลงในแต่ละปีหลังโครงการสิ้นสุด</p>
+    <p><b>5. Present Value (PV):</b> มูลค่าปัจจุบันของเงินในอนาคตที่ทอนกลับมาด้วยอัตราคิดลด</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -71,7 +74,7 @@ def calculate_advanced_sroi(total_input, discount_rate, duration, outcomes):
     for item in outcomes:
         if not item['stakeholder']: continue
         
-        # คำนวณ Net Impact ปีแรก
+        # คำนวณ Impact ปีแรก
         initial_impact = (item['proxy'] * item['qty']) * \
                          (1 - item['dw']) * (1 - item['disp']) * (1 - item['attr'])
         
@@ -103,7 +106,7 @@ def calculate_advanced_sroi(total_input, discount_rate, duration, outcomes):
 with st.sidebar:
     st.header("⚙️ ตั้งค่าโครงการ")
     p_name = st.text_input("ชื่อโครงการ", value="SROI_Project_2026")
-    t_input = st.number_input("งบประมาณรวม (Total Input)", value=100000, step=1000)
+    t_input = st.number_input("งบประมาณรวม (Total Input)", value=100000, min_value=1, step=1000)
     d_rate = st.number_input("Discount Rate (%)", value=3.5, step=0.1)
     years = st.slider("ระยะเวลาที่ต้องการวิเคราะห์ (ปี)", 1, 10, 5)
     st.divider()
@@ -129,9 +132,9 @@ outcomes_input = []
 for i in range(st.session_state.num_rows):
     with st.expander(f"รายการที่ {i+1}", expanded=True):
         r1_c1, r1_c2, r1_c3 = st.columns([2, 1, 1])
-        with r1_c1: stk = st.text_input("ชื่อผู้มีส่วนได้เสีย/ผลลัพธ์", key=f"stk_{i}")
+        with r1_c1: stk = st.text_input("ผู้มีส่วนได้เสีย/ผลลัพธ์", key=f"stk_{i}")
         with r1_c2: prx = st.number_input("Proxy (บาท)", value=0, key=f"prx_{i}")
-        with r1_c3: q = st.number_input("จำนวนหน่วย", value=0, key=f"q_{i}")
+        with r1_c3: q = st.number_input("จำนวน", value=0, key=f"q_{i}")
         
         r2_c1, r2_c2, r2_c3, r2_c4 = st.columns(4) 
         with r2_c1: dw = st.slider("Deadweight", 0.0, 1.0, 0.0, key=f"dw_{i}")
@@ -152,7 +155,7 @@ if 'sroi_results' in st.session_state:
     res = st.session_state.sroi_results
     st.divider()
     
-    # ส่วน Metrics (ตัวหนังสือดำ พื้นขาว)
+    # ส่วนสรุปผลตัวชี้วัด (พื้นหลังขาว ตัวหนังสือดำ)
     st.subheader("📈 สรุปผลตัวชี้วัดทางการเงิน (Financial Indicators)")
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("SROI Ratio", f"{res['ratio']:.2f}")
@@ -170,6 +173,6 @@ if 'sroi_results' in st.session_state:
     df_with_summary = pd.concat([df_final, pd.DataFrame([summary_row])], ignore_index=True)
     st.dataframe(df_with_summary.style.format(precision=2, thousands=","), use_container_width=True)
 
-    # ส่งออก CSV
+    # ดาวน์โหลด CSV
     csv_data = df_with_summary.to_csv(index=False).encode('utf-8-sig')
     st.download_button("📥 Download Full CSV Report", csv_data, f"SROI_{res['p_name']}.csv", "text/csv")
