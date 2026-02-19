@@ -45,7 +45,7 @@ with st.expander("ℹ️ คำอธิบายศัพท์เทคนิ�
     <div class="info-box">
     <p><b>1. Deadweight:</b> ผลลัพธ์ที่จะเกิดขึ้นอยู่แล้วแม้ไม่มีโครงการ</p>
     <p><b>2. Displacement:</b> การย้ายปัญหาจากจุดหนึ่งไปอีกจุดหนึ่ง</p>
-    <p><b>3. Attribution:</b> ผลที่เกิดจากหน่วยงานอื่นหรือปัจจัยภายนอกที่ไม่ใช่โครงการเรา 100%</p>
+    <p><b>3. Attribution:</b> ผลที่เกิดจากหน่วยงานอื่นที่ไม่ใช่โครงการนี้ 100%</p>
     <p><b>4. Drop-off:</b> อัตราที่ผลประโยชน์ลดลงในแต่ละปีหลังโครงการสิ้นสุด</p>
     <p><b>5. Present Value (PV):</b> มูลค่าปัจจุบันของเงินในอนาคตที่ทอนกลับมาด้วยอัตราคิดลด</p>
     </div>
@@ -117,7 +117,12 @@ for i in range(st.session_state.num_rows):
 # --- 8. ประมวลผลและส่งออกรายงาน ---
 if st.button("🚀 คำนวณและประมวลผล SROI", type="primary", use_container_width=True):
     ratio, tpv, details, y_totals = calculate_advanced_sroi(t_input, d_rate, years, outcomes_input)
-    st.session_state.res = {"ratio": ratio, "tpv": tpv, "npv": tpv - t_input, "details": details, "y_totals": y_totals, "t_input": t_input, "p_name": p_name}
+    # เก็บข้อมูลลง Session State เพื่อให้ดาวน์โหลดได้โดยไม่เจอ NameError
+    st.session_state.res = {
+        "ratio": ratio, "tpv": tpv, "npv": tpv - t_input, 
+        "details": details, "y_totals": y_totals, 
+        "t_input": t_input, "p_name": p_name
+    }
 
 if 'res' in st.session_state:
     r = st.session_state.res
@@ -128,10 +133,50 @@ if 'res' in st.session_state:
     m3.metric("Net PV (NPV)", f"฿{r['npv']:,.2f}")
     m4.metric("Total Input", f"฿{r['t_input']:,.2f}")
 
-    df_summary = pd.DataFrame(r['details'])
-    st.dataframe(df_summary.style.format(precision=2, thousands=","), use_container_width=True)
+    df_final = pd.DataFrame(r['details'])
+    summary_row = {"ผู้มีส่วนได้เสีย/ผลลัพธ์": "TOTAL PV PER YEAR", "Total PV (TPV)": r['tpv']}
+    for idx, val in enumerate(r['y_totals']): summary_row[f"ปีที่ {idx+1} (PV)"] = val
+    df_with_summary = pd.concat([df_final, pd.DataFrame([summary_row])], ignore_index=True)
+    st.dataframe(df_with_summary.style.format(precision=2, thousands=","), use_container_width=True)
 
     st.subheader("📥 ดาวน์โหลดรายงาน")
     e_col1, e_col2 = st.columns(2)
+    
     with e_col1:
-        csv_data
+        # 1. Export CSV (รองรับภาษาไทย)
+        csv_data = df_with_summary.to_csv(index=False).encode('utf-8-sig')
+        st.download_button("Download CSV (Excel)", csv_data, f"SROI_{r['p_name']}.csv", "text/csv")
+    
+    with e_col2:
+        # 2. Export PDF (รองรับภาษาไทย)
+        def generate_pdf(data):
+            pdf = FPDF()
+            pdf.add_page()
+            font_path = "THSarabun.ttf"
+            if os.path.exists(font_path):
+                pdf.add_font("THSarabun", "", font_path)
+                pdf.set_font("THSarabun", size=18)
+            else:
+                pdf.set_font("Arial", size=14)
+            
+            def s_txt(text):
+                if not os.path.exists(font_path):
+                    return "".join([c if ord(c) < 128 else "?" for c in str(text)])
+                return str(text)
+
+            pdf.cell(200, 10, txt=s_txt("SROI Analysis Report"), ln=True, align='C')
+            pdf.ln(10)
+            pdf.cell(200, 10, txt=s_txt(f"โครงการ: {data['p_name']}"), ln=True)
+            pdf.cell(200, 10, txt=s_txt(f"SROI Ratio: {data['ratio']:.2f}"), ln=True)
+            pdf.cell(200, 10, txt=s_txt(f"Total PV (TPV): {data['tpv']:,.2f} บาท"), ln=True)
+            pdf.ln(10)
+            pdf.cell(200, 10, txt=s_txt("สรุปรายรายการ:"), ln=True)
+            for d in data['details']:
+                pdf.cell(200, 10, txt=s_txt(f"- {d['ผู้มีส่วนได้เสีย/ผลลัพธ์']}: {d['Total PV (TPV)']:,.2f} บาท"), ln=True)
+            return pdf.output()
+
+        try:
+            pdf_bytes = generate_pdf(r)
+            st.download_button("Download PDF (Report)", pdf_bytes, f"SROI_Report_{r['p_name']}.pdf", "application/pdf")
+        except Exception as e:
+            st.error(f"เกิดข้อผิดพลาดในการสร้าง PDF: {e}")
