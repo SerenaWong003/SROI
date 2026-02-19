@@ -94,7 +94,7 @@ def add_row():
 def remove_row():
     if st.session_state.num_rows > 1: st.session_state.num_rows -= 1
 
-st.subheader("📝 รายละเอียดข้อมูลผลลัพธ์ คำนวนได้สูสุด 10 รายการ")
+st.subheader("📝 รายละเอียดข้อมูลผลลัพธ์ คำนวนได้สูงสุด 10 รายการ")
 c_b1, c_b2, _ = st.columns([1, 1, 4])
 with c_b1: st.button("➕ เพิ่มรายการ", on_click=add_row, use_container_width=True)
 with c_b2: st.button("➖ ลบรายการ", on_click=remove_row, use_container_width=True)
