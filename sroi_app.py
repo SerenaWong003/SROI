@@ -7,7 +7,7 @@ import os
 # --- 1. การตั้งค่าหน้าจอ ---
 st.set_page_config(page_title="SROI Professional Calculator", layout="wide")
 
-# --- 2. ปรับแต่ง CSS - บังคับสีดำบนพื้นหลังขาว ---
+# --- 2. CSS บังคับสีดำบนพื้นหลังขาว ---
 st.markdown("""
     <style>
     .main { background-color: #f8f9fa; }
@@ -17,10 +17,9 @@ st.markdown("""
         padding: 20px;
         border-radius: 12px;
         box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-        text-align: center;
     }
-    [data-testid="stMetricValue"] { color: #000000 !important; font-weight: bold; font-size: 2.2rem !important; }
-    [data-testid="stMetricLabel"] { color: #000000 !important; font-weight: 600; font-size: 1.1rem !important; }
+    [data-testid="stMetricValue"] { color: #000000 !important; font-weight: bold; }
+    [data-testid="stMetricLabel"] { color: #000000 !important; font-weight: 600; }
     .info-box { 
         background-color: #ffffff; padding: 20px; border-radius: 8px; 
         border: 1px solid #2980b9; border-left: 10px solid #2980b9;
@@ -30,16 +29,16 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. ฟังก์ชันสำหรับล้างข้อมูล ---
+# --- 3. ฟังก์ชัน Reset ---
 def reset_system():
     for key in list(st.session_state.keys()):
         del st.session_state[key]
     st.session_state.num_rows = 1
     st.rerun()
 
-st.title("📊 SROI Calculator (Full Financial Edition)")
+st.title("📊 SROI Calculator (Grand Final Edition)")
 
-# --- 4. ส่วนอธิบายศัพท์ (ตัวหนังสือสีดำ พื้นหลังขาว) ---
+# --- 4. Glossary ---
 with st.expander("ℹ️ คำอธิบายศัพท์เทคนิคในการคำนวณ SROI", expanded=False):
     st.markdown("""
     <div class="info-box">
@@ -76,7 +75,7 @@ def calculate_advanced_sroi(total_input, discount_rate, duration, outcomes):
     ratio = total_pv_all / total_input if total_input > 0 else 0
     return ratio, total_pv_all, detailed_list, yearly_totals
 
-# --- 6. ส่วน Sidebar ---
+# --- 6. Sidebar ---
 with st.sidebar:
     st.header("⚙️ ตั้งค่าโครงการ")
     p_name = st.text_input("ชื่อโครงการ", value="โครงการวิจัย_2026")
@@ -88,17 +87,17 @@ with st.sidebar:
         reset_system()
     st.caption("พัฒนาระบบโดย : สำนักวิจัย มหาวิทยาลัยพายัพ")
 
-# --- 7. การจัดการรายการข้อมูล ---
+# --- 7. ข้อมูลนำเข้า ---
 if 'num_rows' not in st.session_state: st.session_state.num_rows = 1
 def add_row():
     if st.session_state.num_rows < 10: st.session_state.num_rows += 1
 def remove_row():
     if st.session_state.num_rows > 1: st.session_state.num_rows -= 1
 
-st.subheader("📝 รายละเอียดข้อมูลผลลัพธ์ สูงสุด 10 รายการ")
+st.subheader("📝 รายละเอียดข้อมูลผลลัพธ์")
 c_b1, c_b2, _ = st.columns([1, 1, 4])
-with c_b1: st.button("➕ เพิ่มรายการ", on_click=add_row, use_container_width=True)
-with c_b2: st.button("➖ ลบรายการ", on_click=remove_row, use_container_width=True)
+with c_b1: st.button("➕ เพิ่มแถว", on_click=add_row, use_container_width=True)
+with c_b2: st.button("➖ ลบแถว", on_click=remove_row, use_container_width=True)
 
 outcomes_input = []
 for i in range(st.session_state.num_rows):
@@ -114,7 +113,7 @@ for i in range(st.session_state.num_rows):
         with r2_c4: drp = st.slider("Drop-off", 0.0, 1.0, 0.0, key=f"drp_{i}")
         outcomes_input.append({"stakeholder": stk, "proxy": prx, "qty": q, "dw": dw, "disp": disp, "attr": att, "drop_off": drp})
 
-# --- 8. ประมวลผลและส่งออกรายงาน ---
+# --- 8. แสดงผลและ Export ---
 if st.button("🚀 คำนวณผล SROI", type="primary", use_container_width=True):
     ratio, tpv, details, y_totals = calculate_advanced_sroi(t_input, d_rate, years, outcomes_input)
     st.session_state.res = {"ratio": ratio, "tpv": tpv, "npv": tpv - t_input, "details": details, "y_totals": y_totals, "t_input": t_input, "p_name": p_name}
@@ -141,28 +140,31 @@ if 'res' in st.session_state:
         st.download_button("Download CSV (Excel)", csv, f"SROI_{r['p_name']}.csv", "text/csv")
     with e_col2:
         def generate_pdf(data):
+            # สร้าง PDF โดยเปิดใช้งาน Unicode
             pdf = FPDF()
             pdf.add_page()
+            
             font_path = "THSarabun.ttf"
             if os.path.exists(font_path):
-                pdf.add_font("THSarabun", "", font_path)
+                # สำคัญ: ต้องใส่ชื่อฟอนต์ที่ประกาศกับ pdf.set_font ให้ตรงกันเป๊ะ
+                pdf.add_font("THSarabun", style="", fname=font_path)
                 pdf.set_font("THSarabun", size=18)
             else:
                 pdf.set_font("helvetica", size=14)
             
-            def s_txt(t): return str(t) if os.path.exists(font_path) else "".join([c if ord(c) < 128 else "?" for c in str(t)])
-            
-            pdf.cell(200, 10, txt=s_txt("SROI Analysis Report"), ln=True, align='C')
+            # เขียนเนื้อหาภาษาไทยโดยตรง (ถ้ามีฟอนต์จะแสดงผลได้)
+            pdf.cell(200, 10, txt="SROI Analysis Report", ln=True, align='C')
             pdf.ln(10)
-            pdf.cell(200, 10, txt=s_txt(f"โครงการ: {data['p_name']}"), ln=True)
-            pdf.cell(200, 10, txt=s_txt(f"SROI Ratio: {data['ratio']:.2f}"), ln=True)
-            pdf.cell(200, 10, txt=s_txt(f"Total PV: {data['tpv']:,.2f} บาท"), ln=True)
+            pdf.cell(200, 10, txt=f"ชื่อโครงการ: {data['p_name']}", ln=True)
+            pdf.cell(200, 10, txt=f"SROI Ratio: {data['ratio']:.2f}", ln=True)
+            pdf.cell(200, 10, txt=f"Total PV: {data['tpv']:,.2f} บาท", ln=True)
+            pdf.cell(200, 10, txt=f"Net PV: {data['npv']:,.2f} บาท", ln=True)
             pdf.ln(10)
-            pdf.cell(200, 10, txt=s_txt("รายละเอียด:"), ln=True)
+            pdf.cell(200, 10, txt="สรุปรายรายการ:", ln=True)
             for d in data['details']:
-                pdf.cell(200, 10, txt=s_txt(f"- {d['ผู้มีส่วนได้เสีย/ผลลัพธ์']}: {d['Total PV (TPV)']:,.2f} บาท"), ln=True)
+                # ใช้ชื่อคอลัมน์ภาษาไทยให้ตรงกับใน DataFrame
+                pdf.cell(200, 10, txt=f"- {d['ผู้มีส่วนได้เสีย/ผลลัพธ์']}: {d['Total PV (TPV)']:,.2f} บาท", ln=True)
             
-            # --- จุดแก้ไขสำคัญ: แปลง bytearray เป็น bytes ---
             return bytes(pdf.output())
 
         try:
