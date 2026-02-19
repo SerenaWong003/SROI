@@ -1,0 +1,83 @@
+import streamlit as st
+import pandas as pd
+from streamlit_gsheets import GSheetsConnection
+
+# --- การตั้งค่าหน้าจอ ---
+st.set_page_config(page_title="SROI Research Tool", layout="wide")
+st.title("📊 SROI Web-based Calculator & Database")
+
+# --- การเชื่อมต่อ Google Sheets ---
+# แนะนำให้ใช้ตัวนี้เพื่อความปลอดภัยของข้อมูลงานวิจัย
+conn = st.connection("gsheets", type=GSheetsConnection)
+
+# --- Logic การคำนวณ (หลังบ้าน) ---
+def calculate_sroi_logic(total_input, discount_rate, duration, outcomes):
+    total_present_value = 0
+    for item in outcomes:
+        initial_impact = (item['proxy'] * item['qty']) * \
+                         (1 - item['dw']) * (1 - item['disp']) * (1 - item['attr'])
+        item_pv = 0
+        current_impact = initial_impact
+        for year in range(1, duration + 1):
+            if year > 1:
+                current_impact *= (1 - item['drop_off'])
+            pv = current_impact / ((1 + (discount_rate/100)) ** year)
+            item_pv += pv
+        total_present_value += item_pv
+    sroi_ratio = total_present_value / total_input if total_input > 0 else 0
+    return sroi_ratio, total_present_value
+
+# --- UI ส่วนการกรอกข้อมูล ---
+with st.sidebar:
+    st.header("⚙️ ตั้งค่าโครงการ")
+    project_name = st.text_input("ชื่อโครงการวิจัย", value="โครงการวิจัย 001")
+    total_input = st.number_input("งบประมาณรวม (บาท)", value=100000)
+    discount_rate = st.number_input("Discount Rate (%)", value=3.5)
+    duration = st.slider("ระยะเวลา (ปี)", 1, 10, 5)
+
+st.subheader("📝 บันทึกข้อมูลผลลัพธ์ (Outcome Data)")
+with st.form("sroi_form"):
+    col1, col2 = st.columns(2)
+    with col1:
+        stakeholder = st.text_input("ผู้มีส่วนได้เสีย")
+        proxy = st.number_input("ค่าแทนทางการเงิน (Proxy)", value=0)
+        qty = st.number_input("ปริมาณ (Quantity)", value=0)
+    with col2:
+        dw = st.slider("Deadweight", 0.0, 1.0, 0.1)
+        attr = st.slider("Attribution", 0.0, 1.0, 0.1)
+        drop_off = st.slider("Drop-off", 0.0, 1.0, 0.1)
+    
+    submitted = st.form_submit_button("คำนวณและบันทึกลงฐานข้อมูล")
+
+if submitted:
+    # 1. คำนวณผล
+    outcomes = [{"proxy": proxy, "qty": qty, "dw": dw, "disp": 0.0, "attr": attr, "drop_off": drop_off}]
+    ratio, total_pv = calculate_sroi_logic(total_input, discount_rate, duration, outcomes)
+    
+    # 2. แสดงผลหน้าเว็บ
+    st.divider()
+    st.metric("SROI Ratio", f"{ratio:.2f}")
+    
+    # 3. บันทึกลง Google Sheets (Database)
+    # จั่นเจาสร้าง DataFrame เพื่อเตรียมส่งข้อมูล
+    new_data = pd.DataFrame([{
+        "Project": project_name,
+        "Stakeholder": stakeholder,
+        "SROI_Ratio": ratio,
+        "Total_PV": total_pv,
+        "Budget": total_input
+    }])
+    
+    try:
+        # ดึงข้อมูลเก่ามาต่อกับข้อมูลใหม่
+        existing_data = conn.read(worksheet="Sheet1")
+        updated_df = pd.concat([existing_data, new_data], ignore_index=True)
+        conn.update(worksheet="Sheet1", data=updated_df)
+        st.success("✅ บันทึกข้อมูลลง Google Sheets เรียบร้อยครับ!")
+    except:
+        st.error("⚠️ บันทึกไม่สำเร็จ โปรดตรวจสอบการตั้งค่า Credentials")
+
+# --- ส่วนแสดงตารางข้อมูลจาก Sheets ---
+if st.checkbox("เรียกดูข้อมูลทั้งหมดในฐานข้อมูล"):
+    df = conn.read(worksheet="Sheet1")
+    st.dataframe(df)
