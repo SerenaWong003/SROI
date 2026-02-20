@@ -21,6 +21,12 @@ st.markdown("""
     }
     [data-testid="stMetricValue"] { color: #000000 !important; font-weight: bold; }
     [data-testid="stMetricLabel"] { color: #000000 !important; font-weight: 600; }
+    .info-box { 
+        background-color: #ffffff; padding: 15px; border-radius: 8px; 
+        border: 1px solid #2980b9; border-left: 10px solid #2980b9;
+        margin-bottom: 20px; color: #000000 !important;
+        font-size: 0.9rem; line-height: 1.4;
+    }
     .section-head {
         background-color: #e8f4f8; padding: 10px; border-radius: 5px;
         font-weight: bold; color: #2c3e50; margin-bottom: 15px;
@@ -95,19 +101,31 @@ with st.sidebar:
     p_name = st.text_input("ชื่อโครงการ", value="SROI_Project_2026")
     t_input = st.number_input("งบประมาณรวม (Total Input)", value=100000, min_value=1)
     d_rate = st.number_input("Discount Rate (%)", value=3.5, step=0.1)
-    years_val = st.slider("ระยะเวลาวิเคราะห์ (ปี)", 1, 10, 5) # เปลี่ยนชื่อเป็น years_val
+    years_val = st.slider("ระยะเวลาวิเคราะห์ (ปี)", 1, 10, 5)
     st.divider()
     if st.button("🗑️ ล้างข้อมูลทั้งหมด", use_container_width=True):
         reset_system()
     st.caption("พัฒนาระบบโดย: สำนักวิจัย มหาวิทยาลัยพายัพ")
 
-# --- 6. การจัดการรายการ ---
+# --- 6. การจัดการรายการ และ คำอธิบายศัพท์ (จุดที่ปรับเปลี่ยน) ---
+st.subheader("📝 บันทึกข้อมูล Value Map และการคำนวณ")
+
+# ส่วนอธิบายศัพท์ก่อนการใส่รายการ
+st.markdown("""
+    <div class="info-box">
+    <b>💡 คำนิยามปัจจัยปรับลด (Deduction Factors):</b><br>
+    • <b>Deadweight:</b> ผลลัพธ์ที่จะเกิดขึ้นอยู่แล้วแม้ไม่มีโครงการ<br>
+    • <b>Displacement:</b> การย้ายปัญหาจากจุดหนึ่งไปอีกจุดหนึ่ง)<br>
+    • <b>Attribution:</b> ผลที่เกิดจากปัจจัยภายนอกหรือหน่วยงานอื่น <br>
+    • <b>Drop-off:</b> อัตราที่ผลประโยชน์ลดลงในแต่ละปีหลังจากจบโครงการ
+    </div>
+    """, unsafe_allow_html=True)
+
 if 'num_rows' not in st.session_state: st.session_state.num_rows = 1
 def add_row(): st.session_state.num_rows += 1
 def remove_row():
     if st.session_state.num_rows > 1: st.session_state.num_rows -= 1
 
-st.subheader("📝 บันทึกข้อมูล Value Map และการคำนวณ")
 c_b1, c_b2, _ = st.columns([1, 1, 4])
 with c_b1: st.button("➕ เพิ่มรายการ", on_click=add_row, use_container_width=True)
 with c_b2: st.button("➖ ลบรายการล่าสุด", on_click=remove_row, use_container_width=True)
@@ -131,7 +149,6 @@ for i in range(st.session_state.num_rows):
         prx_val = f1.number_input("มูลค่าแทน (บาท)", value=0, key=f"prx_v_{i}")
         qty = f2.number_input("จำนวน", value=0, key=f"qty_{i}")
         
-        st.markdown("**ปัจจัยปรับลด (%)**")
         p1, p2, p3, p4 = st.columns(4)
         dw = p1.number_input("Deadweight %", 0.0, 100.0, 0.0, key=f"dw_{i}")
         disp = p2.number_input("Displacement %", 0.0, 100.0, 0.0, key=f"disp_{i}")
@@ -148,9 +165,7 @@ for i in range(st.session_state.num_rows):
 # --- 7. ประมวลผลและสร้างรายงาน ---
 if st.button("🚀 ประมวลผลและคำนวณ SROI", type="primary", use_container_width=True):
     analysis_time = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-    # เรียกใช้ years_val จาก Slider
     ratio, tpv, details, y_totals = calculate_advanced_sroi(t_input, d_rate, years_val, outcomes_input)
-    # จุดสำคัญ: เก็บค่า years ลงใน session_state เพื่อป้องกัน KeyError
     st.session_state.res = {
         "ratio": ratio, "tpv": tpv, "npv": tpv - t_input,
         "details": details, "y_totals": y_totals, "t_input": t_input, 
@@ -171,11 +186,10 @@ if 'res' in st.session_state:
 
     c1, c2 = st.columns(2)
     with c1:
-        # --- สร้าง CSV พร้อม Header ---
         header_df = pd.DataFrame({
             "ชื่อโครงการ": [r['p_name']],
             "งบประมาณรวม": [f"{r['t_input']:,.2f}"],
-            "ระยะเวลาวิเคราะห์": [f"{r['years']} ปี"], # ตอนนี้ r['years'] มีค่าแล้ว
+            "ระยะเวลาวิเคราะห์": [f"{r['years']} ปี"],
             "วันที่ทำการวิเคราะห์": [r['time']]
         })
         csv_buffer = header_df.to_csv(index=False) + "\n" + df_full.to_csv(index=False)
@@ -194,9 +208,7 @@ if 'res' in st.session_state:
                 pdf.add_page(); pdf.set_font("helvetica", 'B', 16)
             
             pdf.cell(0, 10, txt="SROI Analysis Official Report", align='C', ln=True)
-            pdf.ln(5)
-            pdf.set_font("THSarabunNew" if font_exists else "helvetica", size=14)
-            
+            pdf.ln(5); pdf.set_font("THSarabunNew" if font_exists else "helvetica", size=14)
             pdf.cell(0, 10, txt=f"ชื่อโครงการ: {data['p_name']}", ln=True)
             pdf.cell(0, 10, txt=f"งบประมาณโครงการ (Total Input): {data['t_input']:,.2f} บาท", ln=True)
             pdf.cell(0, 10, txt=f"ระยะเวลาการวิเคราะห์: {data['years']} ปี", ln=True)
@@ -220,7 +232,6 @@ if 'res' in st.session_state:
                 
                 msg = f"ผู้มีส่วนได้เสีย: {d['ผู้มีส่วนได้ส่วนเสีย']}\nกิจกรรม: {d['กิจกรรม (Activity)']}\nตัวชี้วัด: {d['ตัวชี้วัด (Indicator)']}\n"
                 msg += f"มูลค่า TPV ของรายการนี้: {d['Total PV (TPV)']:,.2f} บาท\n"
-                # คำนวณจำนวนปีที่โชว์ในรายย่อยให้ตรงตามจริง
                 msg += "มูลค่ารายปี: " + ", ".join([f"ปีที่ {j+1}: {d[f'ปีที่ {j+1} (PV)']:,.2f}" for j in range(len(data['y_totals']))])
                 
                 pdf.multi_cell(0, 8, txt=msg)
