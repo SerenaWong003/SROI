@@ -198,4 +198,39 @@ if 'res' in st.session_state:
             # --- หัวรายงาน PDF ---
             pdf.cell(0, 10, txt="SROI Analysis Official Report", align='C', ln=True)
             pdf.ln(5)
-            pdf.set_font("THSarabunNew" if font_exists else "helvetica", size=1
+            pdf.set_font("THSarabunNew" if font_exists else "helvetica", size=14)
+            
+            # ตารางข้อมูลโครงการในหัวกระดาษ
+            pdf.cell(0, 10, txt=f"ชื่อโครงการ: {data['p_name']}", ln=True)
+            pdf.cell(0, 10, txt=f"งบประมาณโครงการ (Total Input): {data['t_input']:,.2f} บาท", ln=True)
+            pdf.cell(0, 10, txt=f"ระยะเวลาการวิเคราะห์: {data['years']} ปี", ln=True)
+            pdf.cell(0, 10, txt=f"วันที่ทำการวิเคราะห์: {data['time']}", ln=True)
+            pdf.ln(5)
+            pdf.cell(0, 0, "", "T", ln=True)
+            pdf.ln(5)
+            
+            # สรุปผลทางการเงิน
+            pdf.cell(0, 10, txt=f"SROI Ratio: {data['ratio']:.2f}", ln=True)
+            pdf.cell(0, 10, txt=f"Net Present Value (NPV): {data['npv']:,.2f} บาท", ln=True)
+            pdf.cell(0, 10, txt=f"Total Present Value (TPV): {data['tpv']:,.2f} บาท", ln=True)
+            
+            pdf.ln(5); pdf.cell(0, 10, txt="[ สรุปประมาณการมูลค่าปัจจุบันรายปีรวม ]", ln=True)
+            for idx, val in enumerate(data['y_totals']):
+                pdf.cell(0, 8, txt=f"- ปีที่ {idx+1}: {val:,.2f} บาท", ln=True)
+            
+            pdf.ln(10); pdf.cell(0, 10, txt="[ รายละเอียดการวิเคราะห์ Value Map ]", ln=True)
+            for i, d in enumerate(data['details']):
+                if pdf.get_y() > 230: pdf.add_page()
+                pdf.set_font("THSarabunNew" if font_exists else "helvetica", size=15)
+                pdf.cell(0, 10, txt=f"รายการที่ {i+1}: {d['ผลลัพธ์ (Outcome)']}", ln=True)
+                pdf.set_font("THSarabunNew" if font_exists else "helvetica", size=12)
+                
+                msg = f"ผู้มีส่วนได้เสีย: {d['ผู้มีส่วนได้ส่วนเสีย']}\nกิจกรรม: {d['กิจกรรม (Activity)']}\nตัวชี้วัด: {d['ตัวชี้วัด (Indicator)']}\n"
+                msg += f"มูลค่า TPV ของรายการนี้: {d['Total PV (TPV)']:,.2f} บาท\n"
+                msg += "มูลค่ารายปี: " + ", ".join([f"ปีที่ {j+1}: {d[f'ปีที่ {j+1} (PV)']:,.2f}" for j in range(len(data['y_totals']))])
+                
+                pdf.multi_cell(0, 8, txt=msg)
+                pdf.ln(5); pdf.cell(0, 0, "", "T", ln=True); pdf.ln(5)
+            return bytes(pdf.output())
+
+        st.download_button("📥 Download PDF (Full Report)", generate_full_pdf_report(st.session_state.res), f"SROI_Report_{r['p_name']}.pdf", "application/pdf")
