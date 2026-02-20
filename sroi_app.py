@@ -54,7 +54,7 @@ with st.expander("ℹ️ คำอธิบายศัพท์เทคนิ�
     </div>
     """, unsafe_allow_html=True)
 
-# --- 5. Logic การคำนวณ (ตรวจสอบความถูกต้องของ Loop แล้ว) ---
+# --- 5. Logic การคำนวณ ---
 def calculate_advanced_sroi(total_input, discount_rate, duration, outcomes):
     detailed_list = []
     yearly_totals = [0.0] * duration 
@@ -65,7 +65,6 @@ def calculate_advanced_sroi(total_input, discount_rate, duration, outcomes):
         att_f = item['attr'] / 100
         drp_f = item['drop_off'] / 100
         
-        # คำนวณ Net Impact เริ่มต้น
         initial_impact = (item['proxy_val'] * item['qty']) * (1 - dw_f) * (1 - disp_f) * (1 - att_f)
         current_impact = initial_impact
         item_total_pv = 0
@@ -76,13 +75,11 @@ def calculate_advanced_sroi(total_input, discount_rate, duration, outcomes):
             if year_num > 1:
                 current_impact *= (1 - drp_f)
             
-            # สูตร Present Value: PV = FV / (1 + r)^n
             pv = current_impact / ((1 + (discount_rate/100)) ** year_num)
             item_yearly_pvs.append(pv)
             item_total_pv += pv
             yearly_totals[year_idx] += pv
         
-        # รวบรวมข้อมูลทั้งหมดสำหรับ Export (บรรยาย + ตัวเลข)
         row_data = {
             "ผู้มีส่วนได้ส่วนเสีย": item['stakeholder'],
             "ปัจจัยที่ใช้ (Input)": item['input_text'],
@@ -183,24 +180,29 @@ if 'res' in st.session_state:
 
     c1, c2 = st.columns(2)
     with c1:
-        # Export CSV (Full Data)
         csv = df_full.to_csv(index=False).encode('utf-8-sig')
         st.download_button("📥 Download CSV (Full Data)", csv, f"SROI_Data_{r['p_name']}.csv", "text/csv")
     
     with c2:
-        # Export PDF (Full Report)
+        # --- แก้ไขจุดตาย FPDF Font Bold Exception ---
         def generate_full_pdf(data):
             pdf = FPDF()
             font_path = "THSarabunNew.ttf"
-            if os.path.exists(font_path):
+            font_exists = os.path.exists(font_path)
+            
+            if font_exists:
                 pdf.add_font("THSarabunNew", "", font_path)
-                pdf.add_page(); pdf.set_font("THSarabunNew", size=18)
+                pdf.add_page()
+                pdf.set_font("THSarabunNew", size=18)
             else:
-                pdf.add_page(); pdf.set_font("helvetica", 'B', 16)
+                pdf.add_page()
+                pdf.set_font("helvetica", 'B', 16)
             
             pdf.cell(0, 10, txt=f"SROI Summary Report: {data['p_name']}", align='C', ln=True)
             pdf.ln(5)
-            pdf.set_font("THSarabunNew" if os.path.exists(font_path) else "helvetica", size=14)
+            
+            # ใช้ฟอนต์ปกติเสมอสำหรับ THSarabun เพื่อเลี่ยงบัค
+            pdf.set_font("THSarabunNew" if font_exists else "helvetica", size=14)
             pdf.cell(0, 10, txt=f"SROI Ratio: {data['ratio']:.2f}", ln=True)
             pdf.cell(0, 10, txt=f"Total PV (TPV): {data['tpv']:,.2f} THB", ln=True)
             pdf.ln(10)
@@ -208,9 +210,12 @@ if 'res' in st.session_state:
             pdf.cell(0, 10, txt="[ รายละเอียดการวิเคราะห์แต่ละรายการ ]", ln=True)
             for i, d in enumerate(data['details']):
                 if pdf.get_y() > 250: pdf.add_page()
-                pdf.set_font("THSarabunNew" if os.path.exists(font_path) else "helvetica", 'B', 14)
+                
+                # แก้ไขบรรทัดที่ 211: ไม่ใช้ 'B' ถ้าใช้ฟอนต์ภาษาไทยที่โหลดมาแค่ไฟล์เดียว
+                pdf.set_font("THSarabunNew" if font_exists else "helvetica", size=15) 
                 pdf.cell(0, 10, txt=f"รายการที่ {i+1}: {d['ผลลัพธ์ (Outcome)']}", ln=True)
-                pdf.set_font("THSarabunNew" if os.path.exists(font_path) else "helvetica", size=12)
+                
+                pdf.set_font("THSarabunNew" if font_exists else "helvetica", size=12)
                 pdf.multi_cell(0, 8, txt=f"ผู้มีส่วนได้ส่วนเสีย: {d['ผู้มีส่วนได้ส่วนเสีย']}\nกิจกรรม: {d['กิจกรรม (Activity)']}\nตัวชี้วัด: {d['ตัวชี้วัด (Indicator)']}\nมูลค่า TPV: {d['Total PV (TPV)']:,.2f} บาท")
                 pdf.ln(5); pdf.cell(0, 0, "", "T", ln=True); pdf.ln(5)
             return bytes(pdf.output())
