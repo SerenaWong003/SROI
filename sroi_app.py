@@ -95,7 +95,7 @@ with st.sidebar:
     p_name = st.text_input("ชื่อโครงการ", value="SROI_Project_2026")
     t_input = st.number_input("งบประมาณรวม (Total Input)", value=100000, min_value=1)
     d_rate = st.number_input("Discount Rate (%)", value=3.5, step=0.1)
-    years = st.slider("ระยะเวลาวิเคราะห์ (ปี)", 1, 10, 5)
+    years_val = st.slider("ระยะเวลาวิเคราะห์ (ปี)", 1, 10, 5) # เปลี่ยนชื่อเป็น years_val
     st.divider()
     if st.button("🗑️ ล้างข้อมูลทั้งหมด", use_container_width=True):
         reset_system()
@@ -131,6 +131,7 @@ for i in range(st.session_state.num_rows):
         prx_val = f1.number_input("มูลค่าแทน (บาท)", value=0, key=f"prx_v_{i}")
         qty = f2.number_input("จำนวน", value=0, key=f"qty_{i}")
         
+        st.markdown("**ปัจจัยปรับลด (%)**")
         p1, p2, p3, p4 = st.columns(4)
         dw = p1.number_input("Deadweight %", 0.0, 100.0, 0.0, key=f"dw_{i}")
         disp = p2.number_input("Displacement %", 0.0, 100.0, 0.0, key=f"disp_{i}")
@@ -146,13 +147,14 @@ for i in range(st.session_state.num_rows):
 
 # --- 7. ประมวลผลและสร้างรายงาน ---
 if st.button("🚀 ประมวลผลและคำนวณ SROI", type="primary", use_container_width=True):
-    # บันทึกเวลาที่กดคำนวณ
     analysis_time = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-    ratio, tpv, details, y_totals = calculate_advanced_sroi(t_input, d_rate, years, outcomes_input)
+    # เรียกใช้ years_val จาก Slider
+    ratio, tpv, details, y_totals = calculate_advanced_sroi(t_input, d_rate, years_val, outcomes_input)
+    # จุดสำคัญ: เก็บค่า years ลงใน session_state เพื่อป้องกัน KeyError
     st.session_state.res = {
         "ratio": ratio, "tpv": tpv, "npv": tpv - t_input,
         "details": details, "y_totals": y_totals, "t_input": t_input, 
-        "p_name": p_name, "years": years, "time": analysis_time
+        "p_name": p_name, "years": years_val, "time": analysis_time
     }
 
 if 'res' in st.session_state:
@@ -169,18 +171,14 @@ if 'res' in st.session_state:
 
     c1, c2 = st.columns(2)
     with c1:
-        # --- เพิ่มข้อมูล Header ลงใน CSV ---
-        # สร้าง DataFrame สำหรับข้อมูลโครงการ
-        header_data = {
+        # --- สร้าง CSV พร้อม Header ---
+        header_df = pd.DataFrame({
             "ชื่อโครงการ": [r['p_name']],
             "งบประมาณรวม": [f"{r['t_input']:,.2f}"],
-            "ระยะเวลาวิเคราะห์": [f"{r['years']} ปี"],
+            "ระยะเวลาวิเคราะห์": [f"{r['years']} ปี"], # ตอนนี้ r['years'] มีค่าแล้ว
             "วันที่ทำการวิเคราะห์": [r['time']]
-        }
-        df_header = pd.DataFrame(header_data)
-        
-        # รวม Header กับข้อมูลหลัก (เว้นบรรทัดเพื่อให้ดูง่าย)
-        csv_buffer = df_header.to_csv(index=False) + "\n" + df_full.to_csv(index=False)
+        })
+        csv_buffer = header_df.to_csv(index=False) + "\n" + df_full.to_csv(index=False)
         st.download_button("📥 Download CSV (Full Data)", csv_buffer.encode('utf-8-sig'), f"SROI_Detailed_{r['p_name']}.csv", "text/csv")
     
     with c2:
@@ -195,21 +193,16 @@ if 'res' in st.session_state:
             else:
                 pdf.add_page(); pdf.set_font("helvetica", 'B', 16)
             
-            # --- หัวรายงาน PDF ---
             pdf.cell(0, 10, txt="SROI Analysis Official Report", align='C', ln=True)
             pdf.ln(5)
             pdf.set_font("THSarabunNew" if font_exists else "helvetica", size=14)
             
-            # ตารางข้อมูลโครงการในหัวกระดาษ
             pdf.cell(0, 10, txt=f"ชื่อโครงการ: {data['p_name']}", ln=True)
             pdf.cell(0, 10, txt=f"งบประมาณโครงการ (Total Input): {data['t_input']:,.2f} บาท", ln=True)
             pdf.cell(0, 10, txt=f"ระยะเวลาการวิเคราะห์: {data['years']} ปี", ln=True)
             pdf.cell(0, 10, txt=f"วันที่ทำการวิเคราะห์: {data['time']}", ln=True)
-            pdf.ln(5)
-            pdf.cell(0, 0, "", "T", ln=True)
-            pdf.ln(5)
+            pdf.ln(5); pdf.cell(0, 0, "", "T", ln=True); pdf.ln(5)
             
-            # สรุปผลทางการเงิน
             pdf.cell(0, 10, txt=f"SROI Ratio: {data['ratio']:.2f}", ln=True)
             pdf.cell(0, 10, txt=f"Net Present Value (NPV): {data['npv']:,.2f} บาท", ln=True)
             pdf.cell(0, 10, txt=f"Total Present Value (TPV): {data['tpv']:,.2f} บาท", ln=True)
@@ -227,10 +220,11 @@ if 'res' in st.session_state:
                 
                 msg = f"ผู้มีส่วนได้เสีย: {d['ผู้มีส่วนได้ส่วนเสีย']}\nกิจกรรม: {d['กิจกรรม (Activity)']}\nตัวชี้วัด: {d['ตัวชี้วัด (Indicator)']}\n"
                 msg += f"มูลค่า TPV ของรายการนี้: {d['Total PV (TPV)']:,.2f} บาท\n"
+                # คำนวณจำนวนปีที่โชว์ในรายย่อยให้ตรงตามจริง
                 msg += "มูลค่ารายปี: " + ", ".join([f"ปีที่ {j+1}: {d[f'ปีที่ {j+1} (PV)']:,.2f}" for j in range(len(data['y_totals']))])
                 
                 pdf.multi_cell(0, 8, txt=msg)
                 pdf.ln(5); pdf.cell(0, 0, "", "T", ln=True); pdf.ln(5)
             return bytes(pdf.output())
 
-        st.download_button("📥 Download PDF (Full Report)", generate_full_pdf_report(st.session_state.res), f"SROI_Report_{r['p_name']}.pdf", "application/pdf")
+        st.download_button("📥 Download PDF (Full Report)", generate_full_pdf_report(r), f"SROI_Report_{r['p_name']}.pdf", "application/pdf")
