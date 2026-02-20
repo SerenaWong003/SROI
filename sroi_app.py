@@ -21,11 +21,6 @@ st.markdown("""
     }
     [data-testid="stMetricValue"] { color: #000000 !important; font-weight: bold; }
     [data-testid="stMetricLabel"] { color: #000000 !important; font-weight: 600; }
-    .info-box { 
-        background-color: #ffffff; padding: 20px; border-radius: 8px; 
-        border: 1px solid #2980b9; border-left: 10px solid #2980b9;
-        margin-bottom: 25px; color: #000000 !important;
-    }
     .section-head {
         background-color: #e8f4f8; padding: 10px; border-radius: 5px;
         font-weight: bold; color: #2c3e50; margin-bottom: 15px;
@@ -41,20 +36,9 @@ def reset_system():
     st.session_state.num_rows = 1
     st.rerun()
 
-st.title("📊 SROI Calculator (Grand Final Edition)")
+st.title("📊 SROI Calculator (Full Report Edition)")
 
-# --- 4. ส่วนอธิบายศัพท์ ---
-with st.expander("ℹ️ คำอธิบายศัพท์เทคนิคทางการเงิน", expanded=False):
-    st.markdown("""
-    <div class="info-box">
-    <p><b>1. Deadweight:</b> ผลลัพธ์ที่จะเกิดขึ้นอยู่แล้วแม้ไม่มีโครงการ</p>
-    <p><b>2. Displacement:</b> การย้ายปัญหาจากจุดหนึ่งไปอีกจุดหนึ่ง</p>
-    <p><b>3. Attribution:</b> ผลที่เกิดจากปัจจัยภายนอกที่ไม่ใช่โครงการเรา</p>
-    <p><b>4. Drop-off:</b> อัตราที่ผลประโยชน์ลดลงในแต่ละปีหลังจบโครงการ</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-# --- 5. Logic การคำนวณ ---
+# --- 4. Logic การคำนวณ ---
 def calculate_advanced_sroi(total_input, discount_rate, duration, outcomes):
     detailed_list = []
     yearly_totals = [0.0] * duration 
@@ -72,15 +56,12 @@ def calculate_advanced_sroi(total_input, discount_rate, duration, outcomes):
         
         for year_idx in range(duration):
             year_num = year_idx + 1
-            if year_num > 1:
-                current_impact *= (1 - drp_f)
-            
+            if year_num > 1: current_impact *= (1 - drp_f)
             pv = current_impact / ((1 + (discount_rate/100)) ** year_num)
             item_yearly_pvs.append(pv)
             item_total_pv += pv
             yearly_totals[year_idx] += pv
         
-        # รวบรวมข้อมูลทั้งหมด (ทั้งบรรยายและคำนวณ)
         row_data = {
             "ผู้มีส่วนได้ส่วนเสีย": item['stakeholder'],
             "ปัจจัยที่ใช้ (Input)": item['input_text'],
@@ -98,7 +79,6 @@ def calculate_advanced_sroi(total_input, discount_rate, duration, outcomes):
             "Drop-off (%)": item['drop_off'],
             "Total PV (TPV)": item_total_pv
         }
-        # เพิ่มข้อมูล PV รายปีลงในแถว
         for y_idx, y_pv in enumerate(item_yearly_pvs):
             row_data[f"ปีที่ {y_idx+1} (PV)"] = y_pv
         detailed_list.append(row_data)
@@ -107,7 +87,7 @@ def calculate_advanced_sroi(total_input, discount_rate, duration, outcomes):
     sroi_ratio = total_pv_sum / total_input if total_input > 0 else 0
     return sroi_ratio, total_pv_sum, detailed_list, yearly_totals
 
-# --- 6. ส่วน Sidebar ---
+# --- 5. ส่วน Sidebar ---
 with st.sidebar:
     st.header("⚙️ ตั้งค่าโครงการ")
     p_name = st.text_input("ชื่อโครงการ", value="SROI_Project_2026")
@@ -119,7 +99,7 @@ with st.sidebar:
         reset_system()
     st.caption("พัฒนาระบบโดย: สำนักวิจัย มหาวิทยาลัยพายัพ")
 
-# --- 7. การจัดการรายการ ---
+# --- 6. การจัดการรายการ ---
 if 'num_rows' not in st.session_state: st.session_state.num_rows = 1
 def add_row(): st.session_state.num_rows += 1
 def remove_row():
@@ -149,12 +129,11 @@ for i in range(st.session_state.num_rows):
         prx_val = f1.number_input("มูลค่าแทน (บาท)", value=0, key=f"prx_v_{i}")
         qty = f2.number_input("จำนวน", value=0, key=f"qty_{i}")
         
-        st.markdown("**ปัจจัยปรับลด (%)**")
         p1, p2, p3, p4 = st.columns(4)
-        dw = p1.number_input("Deadweight", 0.0, 100.0, 0.0, key=f"dw_{i}")
-        disp = p2.number_input("Displacement", 0.0, 100.0, 0.0, key=f"disp_{i}")
-        attr = p3.number_input("Attribution", 0.0, 100.0, 0.0, key=f"att_{i}")
-        drop = p4.number_input("Drop-off", 0.0, 100.0, 0.0, key=f"drp_{i}")
+        dw = p1.number_input("Deadweight %", 0.0, 100.0, 0.0, key=f"dw_{i}")
+        disp = p2.number_input("Displacement %", 0.0, 100.0, 0.0, key=f"disp_{i}")
+        attr = p3.number_input("Attribution %", 0.0, 100.0, 0.0, key=f"att_{i}")
+        drop = p4.number_input("Drop-off %", 0.0, 100.0, 0.0, key=f"drp_{i}")
         
         outcomes_input.append({
             "stakeholder": stk, "input_text": inp, "activity_text": act,
@@ -163,13 +142,12 @@ for i in range(st.session_state.num_rows):
             "proxy_val": prx_val, "qty": qty, "dw": dw, "disp": disp, "attr": attr, "drop_off": drop
         })
 
-# --- 8. ประมวลผลและส่งออก ---
+# --- 7. ประมวลผลและสร้างรายงาน ---
 if st.button("🚀 ประมวลผลและคำนวณ SROI", type="primary", use_container_width=True):
     ratio, tpv, details, y_totals = calculate_advanced_sroi(t_input, d_rate, years, outcomes_input)
     st.session_state.res = {
-        "ratio": ratio, "tpv": tpv, "npv": tpv - t_input, 
-        "details": details, "y_totals": y_totals, 
-        "t_input": t_input, "p_name": p_name
+        "ratio": ratio, "tpv": tpv, "npv": tpv - t_input,
+        "details": details, "y_totals": y_totals, "t_input": t_input, "p_name": p_name
     }
 
 if 'res' in st.session_state:
@@ -181,18 +159,16 @@ if 'res' in st.session_state:
     m3.metric("Net PV (NPV)", f"฿{r['npv']:,.2f}")
     m4.metric("Total Input", f"฿{r['t_input']:,.2f}")
 
-    # ตารางหลักที่มีข้อมูลรายปี
     df_full = pd.DataFrame(r['details'])
     st.dataframe(df_full.style.format(precision=2, thousands=","), use_container_width=True)
 
     c1, c2 = st.columns(2)
     with c1:
-        # Export CSV ครบทุกฟิลด์บรรยาย + รายปี
         csv = df_full.to_csv(index=False).encode('utf-8-sig')
-        st.download_button("📥 Download CSV (Full Data & Annual)", csv, f"SROI_Detailed_{r['p_name']}.csv", "text/csv")
+        st.download_button("📥 Download CSV (Full Data)", csv, f"SROI_Detailed_{r['p_name']}.csv", "text/csv")
     
     with c2:
-        def generate_full_pdf(data):
+        def generate_full_pdf_report(data):
             pdf = FPDF()
             font_path = "THSarabunNew.ttf"
             font_exists = os.path.exists(font_path)
@@ -203,34 +179,30 @@ if 'res' in st.session_state:
             else:
                 pdf.add_page(); pdf.set_font("helvetica", 'B', 16)
             
-            # 1. หัวรายงาน
             pdf.cell(0, 10, txt=f"SROI Analysis Report: {data['p_name']}", align='C', ln=True)
             pdf.ln(5); pdf.set_font("THSarabunNew" if font_exists else "helvetica", size=14)
             pdf.cell(0, 10, txt=f"SROI Ratio: {data['ratio']:.2f}", ln=True)
             pdf.cell(0, 10, txt=f"Net Present Value (NPV): {data['npv']:,.2f} บาท", ln=True)
             pdf.cell(0, 10, txt=f"Total Present Value (TPV): {data['tpv']:,.2f} บาท", ln=True)
             
-            # 2. ตารางสรุปรายปี (Summary Forecast)
             pdf.ln(5); pdf.cell(0, 10, txt="[ สรุปประมาณการมูลค่าปัจจุบันรายปีรวม ]", ln=True)
             for idx, val in enumerate(data['y_totals']):
                 pdf.cell(0, 8, txt=f"- ปีที่ {idx+1}: {val:,.2f} บาท", ln=True)
             
-            # 3. รายละเอียด Value Map
-            pdf.ln(10); pdf.cell(0, 10, txt="[ รายละเอียดการวิเคราะห์ Value Map และข้อมูลรายปี ]", ln=True)
+            pdf.ln(10); pdf.cell(0, 10, txt="[ รายละเอียดการวิเคราะห์ Value Map ]", ln=True)
             for i, d in enumerate(data['details']):
                 if pdf.get_y() > 230: pdf.add_page()
                 pdf.set_font("THSarabunNew" if font_exists else "helvetica", size=15)
                 pdf.cell(0, 10, txt=f"รายการที่ {i+1}: {d['ผลลัพธ์ (Outcome)']}", ln=True)
                 pdf.set_font("THSarabunNew" if font_exists else "helvetica", size=12)
                 
-                # ข้อมูลเชิงคุณภาพ
-                msg = f"ผู้มีส่วนได้เสีย: {d['ผู้มีส่วนได้เสีย']}\nกิจกรรม: {d['กิจกรรม (Activity)']}\nตัวชี้วัด: {d['ตัวชี้วัด (Indicator)']}\n"
+                msg = f"ผู้มีส่วนได้เสีย: {d['ผู้มีส่วนได้ส่วนเสีย']}\nกิจกรรม: {d['กิจกรรม (Activity)']}\nตัวชี้วัด: {d['ตัวชี้วัด (Indicator)']}\n"
                 msg += f"มูลค่า TPV ของรายการนี้: {d['Total PV (TPV)']:,.2f} บาท\n"
-                # ข้อมูลรายปีของรายการนั้นๆ
                 msg += "มูลค่ารายปี: " + ", ".join([f"ปีที่ {j+1}: {d[f'ปีที่ {j+1} (PV)']:,.2f}" for j in range(len(data['y_totals']))])
                 
                 pdf.multi_cell(0, 8, txt=msg)
                 pdf.ln(5); pdf.cell(0, 0, "", "T", ln=True); pdf.ln(5)
             return bytes(pdf.output())
 
-        st.download_button("📥 Download PDF (Full Report & Forecast)", generate_full_report(r), f"SROI_Full_Report_{r['p_name']}.pdf", "application/pdf")
+        # ตรวจสอบชื่อฟังก์ชันให้ตรงกัน (generate_full_pdf_report)
+        st.download_button("📥 Download PDF (Full Report)", generate_full_pdf_report(r), f"SROI_Report_{r['p_name']}.pdf", "application/pdf")
