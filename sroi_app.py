@@ -36,7 +36,7 @@ def reset_system():
     st.session_state.num_rows = 1
     st.rerun()
 
-st.title("📊 SROI Calculator (Full Report Edition)")
+st.title("📊 SROI Calculator (Official Report Edition)")
 
 # --- 4. Logic การคำนวณ ---
 def calculate_advanced_sroi(total_input, discount_rate, duration, outcomes):
@@ -56,7 +56,9 @@ def calculate_advanced_sroi(total_input, discount_rate, duration, outcomes):
         
         for year_idx in range(duration):
             year_num = year_idx + 1
-            if year_num > 1: current_impact *= (1 - drp_f)
+            if year_num > 1:
+                current_impact *= (1 - drp_f)
+            
             pv = current_impact / ((1 + (discount_rate/100)) ** year_num)
             item_yearly_pvs.append(pv)
             item_total_pv += pv
@@ -144,10 +146,13 @@ for i in range(st.session_state.num_rows):
 
 # --- 7. ประมวลผลและสร้างรายงาน ---
 if st.button("🚀 ประมวลผลและคำนวณ SROI", type="primary", use_container_width=True):
+    # บันทึกเวลาที่กดคำนวณ
+    analysis_time = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     ratio, tpv, details, y_totals = calculate_advanced_sroi(t_input, d_rate, years, outcomes_input)
     st.session_state.res = {
         "ratio": ratio, "tpv": tpv, "npv": tpv - t_input,
-        "details": details, "y_totals": y_totals, "t_input": t_input, "p_name": p_name
+        "details": details, "y_totals": y_totals, "t_input": t_input, 
+        "p_name": p_name, "years": years, "time": analysis_time
     }
 
 if 'res' in st.session_state:
@@ -164,8 +169,19 @@ if 'res' in st.session_state:
 
     c1, c2 = st.columns(2)
     with c1:
-        csv = df_full.to_csv(index=False).encode('utf-8-sig')
-        st.download_button("📥 Download CSV (Full Data)", csv, f"SROI_Detailed_{r['p_name']}.csv", "text/csv")
+        # --- เพิ่มข้อมูล Header ลงใน CSV ---
+        # สร้าง DataFrame สำหรับข้อมูลโครงการ
+        header_data = {
+            "ชื่อโครงการ": [r['p_name']],
+            "งบประมาณรวม": [f"{r['t_input']:,.2f}"],
+            "ระยะเวลาวิเคราะห์": [f"{r['years']} ปี"],
+            "วันที่ทำการวิเคราะห์": [r['time']]
+        }
+        df_header = pd.DataFrame(header_data)
+        
+        # รวม Header กับข้อมูลหลัก (เว้นบรรทัดเพื่อให้ดูง่าย)
+        csv_buffer = df_header.to_csv(index=False) + "\n" + df_full.to_csv(index=False)
+        st.download_button("📥 Download CSV (Full Data)", csv_buffer.encode('utf-8-sig'), f"SROI_Detailed_{r['p_name']}.csv", "text/csv")
     
     with c2:
         def generate_full_pdf_report(data):
@@ -179,30 +195,7 @@ if 'res' in st.session_state:
             else:
                 pdf.add_page(); pdf.set_font("helvetica", 'B', 16)
             
-            pdf.cell(0, 10, txt=f"SROI Analysis Report: {data['p_name']}", align='C', ln=True)
-            pdf.ln(5); pdf.set_font("THSarabunNew" if font_exists else "helvetica", size=14)
-            pdf.cell(0, 10, txt=f"SROI Ratio: {data['ratio']:.2f}", ln=True)
-            pdf.cell(0, 10, txt=f"Net Present Value (NPV): {data['npv']:,.2f} บาท", ln=True)
-            pdf.cell(0, 10, txt=f"Total Present Value (TPV): {data['tpv']:,.2f} บาท", ln=True)
-            
-            pdf.ln(5); pdf.cell(0, 10, txt="[ สรุปประมาณการมูลค่าปัจจุบันรายปีรวม ]", ln=True)
-            for idx, val in enumerate(data['y_totals']):
-                pdf.cell(0, 8, txt=f"- ปีที่ {idx+1}: {val:,.2f} บาท", ln=True)
-            
-            pdf.ln(10); pdf.cell(0, 10, txt="[ รายละเอียดการวิเคราะห์ Value Map ]", ln=True)
-            for i, d in enumerate(data['details']):
-                if pdf.get_y() > 230: pdf.add_page()
-                pdf.set_font("THSarabunNew" if font_exists else "helvetica", size=15)
-                pdf.cell(0, 10, txt=f"รายการที่ {i+1}: {d['ผลลัพธ์ (Outcome)']}", ln=True)
-                pdf.set_font("THSarabunNew" if font_exists else "helvetica", size=12)
-                
-                msg = f"ผู้มีส่วนได้เสีย: {d['ผู้มีส่วนได้ส่วนเสีย']}\nกิจกรรม: {d['กิจกรรม (Activity)']}\nตัวชี้วัด: {d['ตัวชี้วัด (Indicator)']}\n"
-                msg += f"มูลค่า TPV ของรายการนี้: {d['Total PV (TPV)']:,.2f} บาท\n"
-                msg += "มูลค่ารายปี: " + ", ".join([f"ปีที่ {j+1}: {d[f'ปีที่ {j+1} (PV)']:,.2f}" for j in range(len(data['y_totals']))])
-                
-                pdf.multi_cell(0, 8, txt=msg)
-                pdf.ln(5); pdf.cell(0, 0, "", "T", ln=True); pdf.ln(5)
-            return bytes(pdf.output())
-
-        # ตรวจสอบชื่อฟังก์ชันให้ตรงกัน (generate_full_pdf_report)
-        st.download_button("📥 Download PDF (Full Report)", generate_full_pdf_report(r), f"SROI_Report_{r['p_name']}.pdf", "application/pdf")
+            # --- หัวรายงาน PDF ---
+            pdf.cell(0, 10, txt="SROI Analysis Official Report", align='C', ln=True)
+            pdf.ln(5)
+            pdf.set_font("THSarabunNew" if font_exists else "helvetica", size=1
