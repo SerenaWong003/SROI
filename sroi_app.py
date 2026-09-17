@@ -1,13 +1,23 @@
 import streamlit as st
 import pandas as pd
-from fpdf import FPDF
 import datetime
 import os
+import io
+import base64
+import requests
+import textwrap
 
-# --- 1. การตั้งค่าหน้าจอ ---
-st.set_page_config(page_title="SROI Professional Calculator", layout="wide")
+# --- กำหนดไลบรารีสำหรับสร้าง PDF (ReportLab) ---
+from reportlab.pdfgen import canvas
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.lib.pagesizes import A4
 
-# --- 2. ปรับแต่ง CSS ---
+# ==========================================
+# 1. การตั้งค่าหน้าจอและ CSS
+# ==========================================
+st.set_page_config(page_title="SROI Professional Calculator", layout="wide", page_icon="📊")
+
 st.markdown("""
     <style>
     .main { background-color: #f8f9fa; }
@@ -35,19 +45,39 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. ฟังก์ชันสำหรับล้างข้อมูล ---
+# ==========================================
+# 2. ฟังก์ชันระบบจัดการ
+# ==========================================
+FONT_FILE = "THSarabunNew.ttf"
+FONT_URL = "https://github.com/gungunss/ThaiFonts/raw/master/THSarabunNew.ttf"
+
+def check_and_download_font():
+    """ตรวจสอบและดาวน์โหลดฟอนต์ภาษาไทยอัตโนมัติหากไม่มีในระบบ"""
+    if not os.path.exists(FONT_FILE):
+        try:
+            response = requests.get(FONT_URL)
+            if response.status_code == 200:
+                with open(FONT_FILE, "wb") as f:
+                    f.write(response.content)
+        except Exception as e:
+            pass
+
 def reset_system():
+    """ล้างข้อมูลทั้งหมดในหน้าจอ"""
     for key in list(st.session_state.keys()):
         del st.session_state[key]
     st.session_state.num_rows = 1
     st.rerun()
 
-st.title("📊 SROI Calculator (Official Report Edition)")
+check_and_download_font()
 
-# --- 4. Logic การคำนวณ ---
+# ==========================================
+# 3. Logic การคำนวณ SROI
+# ==========================================
 def calculate_advanced_sroi(total_input, discount_rate, duration, outcomes):
     detailed_list = []
     yearly_totals = [0.0] * duration 
+    
     for item in outcomes:
         if not item['outcome_text']: continue
         dw_f = item['dw'] / 100
@@ -55,6 +85,7 @@ def calculate_advanced_sroi(total_input, discount_rate, duration, outcomes):
         att_f = item['attr'] / 100
         drp_f = item['drop_off'] / 100
         
+        # คำนวณ Impact ปีแรก
         initial_impact = (item['proxy_val'] * item['qty']) * (1 - dw_f) * (1 - disp_f) * (1 - att_f)
         current_impact = initial_impact
         item_total_pv = 0
@@ -63,8 +94,9 @@ def calculate_advanced_sroi(total_input, discount_rate, duration, outcomes):
         for year_idx in range(duration):
             year_num = year_idx + 1
             if year_num > 1:
-                current_impact *= (1 - drp_f)
+                current_impact *= (1 - drp_f) # คิด Drop-off แบบทบต้นในแต่ละปี
             
+            # คำนวณ Present Value (PV)
             pv = current_impact / ((1 + (discount_rate/100)) ** year_num)
             item_yearly_pvs.append(pv)
             item_total_pv += pv
@@ -87,19 +119,26 @@ def calculate_advanced_sroi(total_input, discount_rate, duration, outcomes):
             "Drop-off (%)": item['drop_off'],
             "Total PV (TPV)": item_total_pv
         }
+        
         for y_idx, y_pv in enumerate(item_yearly_pvs):
             row_data[f"ปีที่ {y_idx+1} (PV)"] = y_pv
+            
         detailed_list.append(row_data)
         
     total_pv_sum = sum(yearly_totals)
     sroi_ratio = total_pv_sum / total_input if total_input > 0 else 0
     return sroi_ratio, total_pv_sum, detailed_list, yearly_totals
 
-# --- 5. ส่วน Sidebar ---
+# ==========================================
+# 4. ส่วนหน้าจอและกรอกข้อมูล (UI)
+# ==========================================
+st.title("📊 SROI Calculator (Official Report Edition)")
+
+# --- Sidebar ---
 with st.sidebar:
     st.header("⚙️ ตั้งค่าโครงการ")
     p_name = st.text_input("ชื่อโครงการ", value="SROI_Project_2026")
-    t_input = st.number_input("งบประมาณรวม (Total Input)", value=100000, min_value=1)
+    t_input = st.number_input("งบประมาณรวม (Total Input)", value=100000.0, min_value=1.0)
     d_rate = st.number_input("Discount Rate (%)", value=3.5, step=0.1)
     years_val = st.slider("ระยะเวลาวิเคราะห์ (ปี)", 1, 10, 5)
     st.divider()
@@ -107,21 +146,22 @@ with st.sidebar:
         reset_system()
     st.caption("พัฒนาระบบโดย: สำนักวิจัย มหาวิทยาลัยพายัพ")
 
-# --- 6. การจัดการรายการ และ คำอธิบายศัพท์ (จุดที่ปรับเปลี่ยน) ---
 st.subheader("📝 บันทึกข้อมูล Value Map และการคำนวณ")
 
-# ส่วนอธิบายศัพท์ก่อนการใส่รายการ
 st.markdown("""
     <div class="info-box">
     <b>💡 คำนิยามปัจจัยปรับลด (Deduction Factors):</b><br>
     • <b>Deadweight:</b> ผลลัพธ์ที่จะเกิดขึ้นอยู่แล้วแม้ไม่มีโครงการ<br>
-    • <b>Displacement:</b> การย้ายปัญหาจากจุดหนึ่งไปอีกจุดหนึ่ง)<br>
+    • <b>Displacement:</b> การย้ายปัญหาจากจุดหนึ่งไปอีกจุดหนึ่ง<br>
     • <b>Attribution:</b> ผลที่เกิดจากปัจจัยภายนอกหรือหน่วยงานอื่น <br>
     • <b>Drop-off:</b> อัตราที่ผลประโยชน์ลดลงในแต่ละปีหลังจากจบโครงการ
     </div>
     """, unsafe_allow_html=True)
 
-if 'num_rows' not in st.session_state: st.session_state.num_rows = 1
+# --- จัดการเพิ่ม/ลดรายการ ---
+if 'num_rows' not in st.session_state: 
+    st.session_state.num_rows = 1
+
 def add_row(): st.session_state.num_rows += 1
 def remove_row():
     if st.session_state.num_rows > 1: st.session_state.num_rows -= 1
@@ -146,7 +186,7 @@ for i in range(st.session_state.num_rows):
         
         st.markdown('<div class="section-head">2. ข้อมูลสำหรับการคำนวณ (Financials)</div>', unsafe_allow_html=True)
         f1, f2, f3 = st.columns([2, 1, 1])
-        prx_val = f1.number_input("มูลค่าแทน (บาท)", value=0, key=f"prx_v_{i}")
+        prx_val = f1.number_input("มูลค่าแทน (บาท)", value=0.0, key=f"prx_v_{i}")
         qty = f2.number_input("จำนวน", value=0, key=f"qty_{i}")
         
         p1, p2, p3, p4 = st.columns(4)
@@ -162,7 +202,9 @@ for i in range(st.session_state.num_rows):
             "proxy_val": prx_val, "qty": qty, "dw": dw, "disp": disp, "attr": attr, "drop_off": drop
         })
 
-# --- 7. ประมวลผลและสร้างรายงาน ---
+# ==========================================
+# 5. ประมวลผลและสร้างรายงาน PDF / CSV
+# ==========================================
 if st.button("🚀 ประมวลผลและคำนวณ SROI", type="primary", use_container_width=True):
     analysis_time = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     ratio, tpv, details, y_totals = calculate_advanced_sroi(t_input, d_rate, years_val, outcomes_input)
@@ -185,6 +227,8 @@ if 'res' in st.session_state:
     st.dataframe(df_full.style.format(precision=2, thousands=","), use_container_width=True)
 
     c1, c2 = st.columns(2)
+    
+    # --- ปุ่ม Download CSV ---
     with c1:
         header_df = pd.DataFrame({
             "ชื่อโครงการ": [r['p_name']],
@@ -195,47 +239,111 @@ if 'res' in st.session_state:
         csv_buffer = header_df.to_csv(index=False) + "\n" + df_full.to_csv(index=False)
         st.download_button("📥 Download CSV (Full Data)", csv_buffer.encode('utf-8-sig'), f"SROI_Detailed_{r['p_name']}.csv", "text/csv")
     
-    with c2:
-        def generate_full_pdf_report(data):
-            pdf = FPDF()
-            font_path = "THSarabunNew.ttf"
-            font_exists = os.path.exists(font_path)
+    # --- ฟังก์ชันสร้าง PDF ด้วย ReportLab ---
+    def generate_full_pdf_report(data):
+        packet = io.BytesIO()
+        can = canvas.Canvas(packet, pagesize=A4)
+        width, height = A4
+        
+        font_name = "Helvetica"
+        if os.path.exists(FONT_FILE):
+            pdfmetrics.registerFont(TTFont('ThaiFont', FONT_FILE))
+            font_name = 'ThaiFont'
             
-            if font_exists:
-                pdf.add_font("THSarabunNew", "", font_path)
-                pdf.add_page(); pdf.set_font("THSarabunNew", size=18)
-            else:
-                pdf.add_page(); pdf.set_font("helvetica", 'B', 16)
+        def write_multiline(x, y, text, max_width=80):
+            """ช่วยตัดคำไม่ให้ล้นหน้ากระดาษ"""
+            lines = textwrap.wrap(str(text), width=max_width)
+            for line in lines:
+                can.drawString(x, y, line)
+                y -= 20
+            return y
+        
+        # --- หน้าที่ 1: สรุปภาพรวม ---
+        can.setFont(font_name, 22)
+        can.drawCentredString(width/2, height - 50, "SROI Analysis Official Report")
+        
+        can.setFont(font_name, 16)
+        y_pos = height - 100
+        line_height = 25
+        
+        can.drawString(50, y_pos, f"ชื่อโครงการ: {data['p_name']}")
+        y_pos -= line_height
+        can.drawString(50, y_pos, f"งบประมาณโครงการ (Total Input): {data['t_input']:,.2f} บาท")
+        y_pos -= line_height
+        can.drawString(50, y_pos, f"ระยะเวลาการวิเคราะห์: {data['years']} ปี")
+        y_pos -= line_height
+        can.drawString(50, y_pos, f"วันที่ทำการวิเคราะห์: {data['time']}")
+        y_pos -= (line_height * 2)
+        
+        can.setFont("Helvetica-Bold" if font_name == "Helvetica" else font_name, 18)
+        can.drawString(50, y_pos, f"SROI Ratio: {data['ratio']:.2f}")
+        y_pos -= line_height
+        can.setFont(font_name, 16)
+        can.drawString(50, y_pos, f"Net Present Value (NPV): {data['npv']:,.2f} บาท")
+        y_pos -= line_height
+        can.drawString(50, y_pos, f"Total Present Value (TPV): {data['tpv']:,.2f} บาท")
+        y_pos -= (line_height * 2)
+        
+        can.setFont("Helvetica-Bold" if font_name == "Helvetica" else font_name, 16)
+        can.drawString(50, y_pos, "[ สรุปประมาณการมูลค่าปัจจุบันรายปีรวม ]")
+        y_pos -= line_height
+        can.setFont(font_name, 16)
+        
+        for idx, val in enumerate(data['y_totals']):
+            can.drawString(70, y_pos, f"- ปีที่ {idx+1}: {val:,.2f} บาท")
+            y_pos -= line_height
             
-            pdf.cell(0, 10, txt="SROI Analysis Official Report", align='C', ln=True)
-            pdf.ln(5); pdf.set_font("THSarabunNew" if font_exists else "helvetica", size=14)
-            pdf.cell(0, 10, txt=f"ชื่อโครงการ: {data['p_name']}", ln=True)
-            pdf.cell(0, 10, txt=f"งบประมาณโครงการ (Total Input): {data['t_input']:,.2f} บาท", ln=True)
-            pdf.cell(0, 10, txt=f"ระยะเวลาการวิเคราะห์: {data['years']} ปี", ln=True)
-            pdf.cell(0, 10, txt=f"วันที่ทำการวิเคราะห์: {data['time']}", ln=True)
-            pdf.ln(5); pdf.cell(0, 0, "", "T", ln=True); pdf.ln(5)
+        can.showPage() 
+        
+        # --- หน้าที่ 2 เป็นต้นไป: รายละเอียด ---
+        can.setFont("Helvetica-Bold" if font_name == "Helvetica" else font_name, 18)
+        can.drawString(50, height - 50, "[ รายละเอียดการวิเคราะห์ Value Map ]")
+        y_pos = height - 90
+        
+        for i, d in enumerate(data['details']):
+            if y_pos < 200: # ป้องกันข้อความตกขอบกระดาษ
+                can.showPage()
+                y_pos = height - 50
             
-            pdf.cell(0, 10, txt=f"SROI Ratio: {data['ratio']:.2f}", ln=True)
-            pdf.cell(0, 10, txt=f"Net Present Value (NPV): {data['npv']:,.2f} บาท", ln=True)
-            pdf.cell(0, 10, txt=f"Total Present Value (TPV): {data['tpv']:,.2f} บาท", ln=True)
+            can.setFont("Helvetica-Bold" if font_name == "Helvetica" else font_name, 16)
+            y_pos = write_multiline(50, y_pos, f"รายการที่ {i+1}: {d['ผลลัพธ์ (Outcome)']}", 90)
             
-            pdf.ln(5); pdf.cell(0, 10, txt="[ สรุปประมาณการมูลค่าปัจจุบันรายปีรวม ]", ln=True)
-            for idx, val in enumerate(data['y_totals']):
-                pdf.cell(0, 8, txt=f"- ปีที่ {idx+1}: {val:,.2f} บาท", ln=True)
+            can.setFont(font_name, 14)
+            y_pos = write_multiline(70, y_pos, f"ผู้มีส่วนได้เสีย: {d['ผู้มีส่วนได้ส่วนเสีย']}")
+            y_pos = write_multiline(70, y_pos, f"กิจกรรม: {d['กิจกรรม (Activity)']}")
+            y_pos = write_multiline(70, y_pos, f"ตัวชี้วัด: {d['ตัวชี้วัด (Indicator)']}")
             
-            pdf.ln(10); pdf.cell(0, 10, txt="[ รายละเอียดการวิเคราะห์ Value Map ]", ln=True)
-            for i, d in enumerate(data['details']):
-                if pdf.get_y() > 230: pdf.add_page()
-                pdf.set_font("THSarabunNew" if font_exists else "helvetica", size=15)
-                pdf.cell(0, 10, txt=f"รายการที่ {i+1}: {d['ผลลัพธ์ (Outcome)']}", ln=True)
-                pdf.set_font("THSarabunNew" if font_exists else "helvetica", size=12)
-                
-                msg = f"ผู้มีส่วนได้เสีย: {d['ผู้มีส่วนได้ส่วนเสีย']}\nกิจกรรม: {d['กิจกรรม (Activity)']}\nตัวชี้วัด: {d['ตัวชี้วัด (Indicator)']}\n"
-                msg += f"มูลค่า TPV ของรายการนี้: {d['Total PV (TPV)']:,.2f} บาท\n"
-                msg += "มูลค่ารายปี: " + ", ".join([f"ปีที่ {j+1}: {d[f'ปีที่ {j+1} (PV)']:,.2f}" for j in range(len(data['y_totals']))])
-                
-                pdf.multi_cell(0, 8, txt=msg)
-                pdf.ln(5); pdf.cell(0, 0, "", "T", ln=True); pdf.ln(5)
-            return bytes(pdf.output())
+            can.drawString(70, y_pos, f"มูลค่า TPV ของรายการนี้: {d['Total PV (TPV)']:,.2f} บาท")
+            y_pos -= 25
+            
+            can.drawString(70, y_pos, "มูลค่ารายปี (PV): ")
+            x_pos_year = 160
+            for j in range(len(data['y_totals'])):
+                if x_pos_year > 450: 
+                    y_pos -= 20
+                    x_pos_year = 160
+                can.drawString(x_pos_year, y_pos, f"ปีที่ {j+1}: {d[f'ปีที่ {j+1} (PV)']:,.2f}")
+                x_pos_year += 100
+            
+            y_pos -= 35 
+            can.setStrokeColorRGB(0.8, 0.8, 0.8)
+            can.line(50, y_pos + 15, 545, y_pos + 15) 
 
-        st.download_button("📥 Download PDF (Full Report)", generate_full_pdf_report(r), f"SROI_Report_{r['p_name']}.pdf", "application/pdf")
+        can.save()
+        packet.seek(0)
+        return packet.read()
+
+    # สร้างข้อมูล PDF
+    pdf_bytes = generate_full_pdf_report(r)
+
+    # --- ปุ่ม Download PDF ---
+    with c2:
+        st.download_button("📥 Download PDF (Full Report)", pdf_bytes, f"SROI_Report_{r['p_name']}.pdf", "application/pdf")
+
+    # --- แสดงตัวอย่างรายงาน และ Print as PDF ---
+    st.divider()
+    st.markdown('<div class="section-head">🖨️ ตัวอย่างรายงาน (กดไอคอนเครื่องปริ้นเตอร์เพื่อ Print as PDF)</div>', unsafe_allow_html=True)
+    
+    base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
+    pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800" type="application/pdf"></iframe>'
+    st.markdown(pdf_display, unsafe_allow_html=True)
