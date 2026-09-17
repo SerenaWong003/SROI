@@ -4,14 +4,44 @@ import datetime
 import os
 import io
 import base64
-import requests
 import textwrap
+import subprocess
+import sys
+import urllib.request
 
-# --- กำหนดไลบรารีสำหรับสร้าง PDF (ReportLab) ---
-from reportlab.pdfgen import canvas
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.lib.pagesizes import A4
+# ==========================================
+# 0. ระบบติดตั้งไลบรารีและฟอนต์อัตโนมัติ (Auto-Installer & Font Loader)
+# ==========================================
+# ตรวจสอบและติดตั้ง reportlab หากยังไม่มี
+try:
+    from reportlab.pdfgen import canvas
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    from reportlab.lib.pagesizes import A4
+except ImportError:
+    st.info("กำลังติดตั้งเครื่องมือสร้าง PDF (ReportLab)... กรุณารอสักครู่")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "reportlab"])
+    from reportlab.pdfgen import canvas
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    from reportlab.lib.pagesizes import A4
+    st.success("ติดตั้ง ReportLab สำเร็จ! กรุณากดปุ่มประมวลผลอีกครั้ง")
+
+# ตรวจสอบและดาวน์โหลดฟอนต์ THSarabunNew
+FONT_FILE = "THSarabunNew.ttf"
+FONT_URL = "https://github.com/gungunss/ThaiFonts/raw/master/THSarabunNew.ttf"
+
+@st.cache_resource
+def load_thai_font():
+    if not os.path.exists(FONT_FILE):
+        try:
+            urllib.request.urlretrieve(FONT_URL, FONT_FILE)
+        except Exception as e:
+            st.error(f"ไม่สามารถดาวน์โหลดฟอนต์ได้: {e}")
+            return False
+    return True
+
+font_ready = load_thai_font()
 
 # ==========================================
 # 1. การตั้งค่าหน้าจอและ CSS
@@ -48,28 +78,12 @@ st.markdown("""
 # ==========================================
 # 2. ฟังก์ชันระบบจัดการ
 # ==========================================
-FONT_FILE = "THSarabunNew.ttf"
-FONT_URL = "https://github.com/gungunss/ThaiFonts/raw/master/THSarabunNew.ttf"
-
-def check_and_download_font():
-    """ตรวจสอบและดาวน์โหลดฟอนต์ภาษาไทยอัตโนมัติหากไม่มีในระบบ"""
-    if not os.path.exists(FONT_FILE):
-        try:
-            response = requests.get(FONT_URL)
-            if response.status_code == 200:
-                with open(FONT_FILE, "wb") as f:
-                    f.write(response.content)
-        except Exception as e:
-            pass
-
 def reset_system():
     """ล้างข้อมูลทั้งหมดในหน้าจอ"""
     for key in list(st.session_state.keys()):
         del st.session_state[key]
     st.session_state.num_rows = 1
     st.rerun()
-
-check_and_download_font()
 
 # ==========================================
 # 3. Logic การคำนวณ SROI
@@ -246,7 +260,7 @@ if 'res' in st.session_state:
         width, height = A4
         
         font_name = "Helvetica"
-        if os.path.exists(FONT_FILE):
+        if font_ready and os.path.exists(FONT_FILE):
             pdfmetrics.registerFont(TTFont('ThaiFont', FONT_FILE))
             font_name = 'ThaiFont'
             
