@@ -4,30 +4,26 @@ import datetime
 import os
 import io
 import base64
-import textwrap
-import subprocess
-import sys
 import urllib.request
+import textwrap
 
 # ==========================================
-# 0. ระบบติดตั้งไลบรารีและฟอนต์อัตโนมัติ (Auto-Installer & Font Loader)
+# 0. ระบบตั้งค่าเริ่มต้นและตรวจสอบไลบรารี
 # ==========================================
-# ตรวจสอบและติดตั้ง reportlab หากยังไม่มี
+st.set_page_config(page_title="SROI Professional Calculator", layout="wide", page_icon="📊")
+
+# ตรวจสอบว่าติดตั้ง ReportLab หรือยัง (แก้ปัญหาเว็บพัง)
 try:
     from reportlab.pdfgen import canvas
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
     from reportlab.lib.pagesizes import A4
 except ImportError:
-    st.info("กำลังติดตั้งเครื่องมือสร้าง PDF (ReportLab)... กรุณารอสักครู่")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "reportlab"])
-    from reportlab.pdfgen import canvas
-    from reportlab.pdfbase import pdfmetrics
-    from reportlab.pdfbase.ttfonts import TTFont
-    from reportlab.lib.pagesizes import A4
-    st.success("ติดตั้ง ReportLab สำเร็จ! กรุณากดปุ่มประมวลผลอีกครั้ง")
+    st.error("🚨 ระบบแจ้งเตือนความเสี่ยง: ไม่พบเครื่องมือ 'reportlab'")
+    st.info("นายหญิงโปรดเพิ่มคำว่า `reportlab` ลงในไฟล์ `requirements.txt` บน GitHub แล้วรอระบบรีสตาร์ทสักครู่ครับ")
+    st.stop() # หยุดการทำงานชั่วคราวเพื่อป้องกัน Error สีแดง
 
-# ตรวจสอบและดาวน์โหลดฟอนต์ THSarabunNew
+# ระบบดาวน์โหลดฟอนต์ภาษาไทย (THSarabunNew) อัตโนมัติ
 FONT_FILE = "THSarabunNew.ttf"
 FONT_URL = "https://github.com/gungunss/ThaiFonts/raw/master/THSarabunNew.ttf"
 
@@ -36,18 +32,13 @@ def load_thai_font():
     if not os.path.exists(FONT_FILE):
         try:
             urllib.request.urlretrieve(FONT_URL, FONT_FILE)
-        except Exception as e:
-            st.error(f"ไม่สามารถดาวน์โหลดฟอนต์ได้: {e}")
-            return False
-    return True
-
-font_ready = load_thai_font()
+        except Exception:
+            pass
+load_thai_font()
 
 # ==========================================
-# 1. การตั้งค่าหน้าจอและ CSS
+# 1. การตกแต่งหน้าจอ (CSS)
 # ==========================================
-st.set_page_config(page_title="SROI Professional Calculator", layout="wide", page_icon="📊")
-
 st.markdown("""
     <style>
     .main { background-color: #f8f9fa; }
@@ -75,18 +66,14 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# ==========================================
-# 2. ฟังก์ชันระบบจัดการ
-# ==========================================
 def reset_system():
-    """ล้างข้อมูลทั้งหมดในหน้าจอ"""
     for key in list(st.session_state.keys()):
         del st.session_state[key]
     st.session_state.num_rows = 1
     st.rerun()
 
 # ==========================================
-# 3. Logic การคำนวณ SROI
+# 2. ฟังก์ชันคำนวณ SROI ทางคณิตศาสตร์
 # ==========================================
 def calculate_advanced_sroi(total_input, discount_rate, duration, outcomes):
     detailed_list = []
@@ -99,7 +86,6 @@ def calculate_advanced_sroi(total_input, discount_rate, duration, outcomes):
         att_f = item['attr'] / 100
         drp_f = item['drop_off'] / 100
         
-        # คำนวณ Impact ปีแรก
         initial_impact = (item['proxy_val'] * item['qty']) * (1 - dw_f) * (1 - disp_f) * (1 - att_f)
         current_impact = initial_impact
         item_total_pv = 0
@@ -108,9 +94,8 @@ def calculate_advanced_sroi(total_input, discount_rate, duration, outcomes):
         for year_idx in range(duration):
             year_num = year_idx + 1
             if year_num > 1:
-                current_impact *= (1 - drp_f) # คิด Drop-off แบบทบต้นในแต่ละปี
+                current_impact *= (1 - drp_f)
             
-            # คำนวณ Present Value (PV)
             pv = current_impact / ((1 + (discount_rate/100)) ** year_num)
             item_yearly_pvs.append(pv)
             item_total_pv += pv
@@ -133,7 +118,6 @@ def calculate_advanced_sroi(total_input, discount_rate, duration, outcomes):
             "Drop-off (%)": item['drop_off'],
             "Total PV (TPV)": item_total_pv
         }
-        
         for y_idx, y_pv in enumerate(item_yearly_pvs):
             row_data[f"ปีที่ {y_idx+1} (PV)"] = y_pv
             
@@ -144,11 +128,10 @@ def calculate_advanced_sroi(total_input, discount_rate, duration, outcomes):
     return sroi_ratio, total_pv_sum, detailed_list, yearly_totals
 
 # ==========================================
-# 4. ส่วนหน้าจอและกรอกข้อมูล (UI)
+# 3. หน้าจอการใช้งาน (UI)
 # ==========================================
 st.title("📊 SROI Calculator (Official Report Edition)")
 
-# --- Sidebar ---
 with st.sidebar:
     st.header("⚙️ ตั้งค่าโครงการ")
     p_name = st.text_input("ชื่อโครงการ", value="SROI_Project_2026")
@@ -161,7 +144,6 @@ with st.sidebar:
     st.caption("พัฒนาระบบโดย: สำนักวิจัย มหาวิทยาลัยพายัพ")
 
 st.subheader("📝 บันทึกข้อมูล Value Map และการคำนวณ")
-
 st.markdown("""
     <div class="info-box">
     <b>💡 คำนิยามปัจจัยปรับลด (Deduction Factors):</b><br>
@@ -172,10 +154,7 @@ st.markdown("""
     </div>
     """, unsafe_allow_html=True)
 
-# --- จัดการเพิ่ม/ลดรายการ ---
-if 'num_rows' not in st.session_state: 
-    st.session_state.num_rows = 1
-
+if 'num_rows' not in st.session_state: st.session_state.num_rows = 1
 def add_row(): st.session_state.num_rows += 1
 def remove_row():
     if st.session_state.num_rows > 1: st.session_state.num_rows -= 1
@@ -217,7 +196,7 @@ for i in range(st.session_state.num_rows):
         })
 
 # ==========================================
-# 5. ประมวลผลและสร้างรายงาน PDF / CSV
+# 4. ประมวลผลและสร้างรายงาน PDF / CSV
 # ==========================================
 if st.button("🚀 ประมวลผลและคำนวณ SROI", type="primary", use_container_width=True):
     analysis_time = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
@@ -242,7 +221,6 @@ if 'res' in st.session_state:
 
     c1, c2 = st.columns(2)
     
-    # --- ปุ่ม Download CSV ---
     with c1:
         header_df = pd.DataFrame({
             "ชื่อโครงการ": [r['p_name']],
@@ -253,26 +231,24 @@ if 'res' in st.session_state:
         csv_buffer = header_df.to_csv(index=False) + "\n" + df_full.to_csv(index=False)
         st.download_button("📥 Download CSV (Full Data)", csv_buffer.encode('utf-8-sig'), f"SROI_Detailed_{r['p_name']}.csv", "text/csv")
     
-    # --- ฟังก์ชันสร้าง PDF ด้วย ReportLab ---
     def generate_full_pdf_report(data):
         packet = io.BytesIO()
         can = canvas.Canvas(packet, pagesize=A4)
         width, height = A4
         
         font_name = "Helvetica"
-        if font_ready and os.path.exists(FONT_FILE):
+        if os.path.exists(FONT_FILE):
             pdfmetrics.registerFont(TTFont('ThaiFont', FONT_FILE))
             font_name = 'ThaiFont'
             
         def write_multiline(x, y, text, max_width=80):
-            """ช่วยตัดคำไม่ให้ล้นหน้ากระดาษ"""
             lines = textwrap.wrap(str(text), width=max_width)
             for line in lines:
                 can.drawString(x, y, line)
                 y -= 20
             return y
         
-        # --- หน้าที่ 1: สรุปภาพรวม ---
+        # --- หน้า 1 ---
         can.setFont(font_name, 22)
         can.drawCentredString(width/2, height - 50, "SROI Analysis Official Report")
         
@@ -309,13 +285,13 @@ if 'res' in st.session_state:
             
         can.showPage() 
         
-        # --- หน้าที่ 2 เป็นต้นไป: รายละเอียด ---
+        # --- หน้า 2 ---
         can.setFont("Helvetica-Bold" if font_name == "Helvetica" else font_name, 18)
         can.drawString(50, height - 50, "[ รายละเอียดการวิเคราะห์ Value Map ]")
         y_pos = height - 90
         
         for i, d in enumerate(data['details']):
-            if y_pos < 200: # ป้องกันข้อความตกขอบกระดาษ
+            if y_pos < 200:
                 can.showPage()
                 y_pos = height - 50
             
@@ -347,14 +323,11 @@ if 'res' in st.session_state:
         packet.seek(0)
         return packet.read()
 
-    # สร้างข้อมูล PDF
     pdf_bytes = generate_full_pdf_report(r)
 
-    # --- ปุ่ม Download PDF ---
     with c2:
         st.download_button("📥 Download PDF (Full Report)", pdf_bytes, f"SROI_Report_{r['p_name']}.pdf", "application/pdf")
 
-    # --- แสดงตัวอย่างรายงาน และ Print as PDF ---
     st.divider()
     st.markdown('<div class="section-head">🖨️ ตัวอย่างรายงาน (กดไอคอนเครื่องปริ้นเตอร์เพื่อ Print as PDF)</div>', unsafe_allow_html=True)
     
